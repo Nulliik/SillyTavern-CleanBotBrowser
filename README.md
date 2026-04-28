@@ -1,3 +1,9 @@
+# Note
+This repo if fork of original BotBrowser repository edited by Codex to remove malicious code. Treat it unsafe for now as it was fully vibecoded, more deep inspection of extension is still needed
+I have no experience in developing SillyTavern extensions, this repo might serve as start point for more professional developers to pick it up as base
+I do not reccomend to install it yet as I am not sure if all sources of vulnerabilities are removed
+
+
 ![Bot Browser Banner](images/banner.png)
 
 # Bot Browser
