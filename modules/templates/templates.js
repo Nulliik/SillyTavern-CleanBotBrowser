@@ -190,10 +190,6 @@ export function getOriginalMenuHTML(recentlyViewed) {
                     </div>
                     <span>Crushon Likes</span>
                 </button>
-                <button class="bot-browser-source" data-source="harpy">
-                    <div class="bot-browser-source-icon" style="background-image: url('https://harpy.chat/icons/logo.svg'); background-size: 80%; background-position: center; background-repeat: no-repeat; background-color: #1a1a2e;"></div>
-                    <span>Harpy.chat</span>
-                </button>
                 <button class="bot-browser-source" data-source="sakura">
                     <div class="bot-browser-source-icon" style="background-image: url('https://sakura.fm/favicon.ico'); background-size: cover; background-position: center; background-repeat: no-repeat; background-color: #1a0a1a;"></div>
                     <span>Sakura.fm</span>

@@ -1,12 +1,11 @@
 // SpicyChat.ai API Module
-// Typesense search engine - public read-only API key, no auth needed for search
+// Typesense search engine. This cleaned build does not ship a bundled key.
 // Note: SpicyChat is a chat platform. No character card download is available.
 // Characters will be imported with available data (name, greeting, tags).
 
 import { proxiedFetch } from './corsProxy.js';
 
-const TYPESENSE_BASE = 'https://etmzpxgvnid370fyp.a1.typesense.net';
-const TYPESENSE_KEY = 'STHKtT6jrC5z1IozTJHIeSN4qN9oL1s3';
+//const TYPESENSE_BASE = 'https://etmzpxgvnid370fyp.a1.typesense.net'; #TODO: To be removed
 const COLLECTION = 'public_characters_alias';
 const IMAGE_CDN = 'https://cdn.nd-api.com';
 const API_BASE = 'https://prod.nd-api.com';
@@ -33,6 +32,19 @@ export let spicychatApiState = {
 
 export function resetSpicychatState() {
     spicychatApiState = { page: 1, hasMore: true, isLoading: false, lastSearch: '', lastSort: SPICYCHAT_SORT_OPTIONS.TRENDING, lastFilter: '', total: 0, activeSort: SPICYCHAT_SORT_OPTIONS.TRENDING, nsfwMode: 'all', activeTag: null };
+}
+
+function getSpicychatTypesenseKey() {
+    try {
+        const injected = typeof window !== 'undefined'
+            ? String(window.__BOT_BROWSER_SPICYCHAT_TYPESENSE_KEY || '').trim()
+            : '';
+        if (injected) return injected;
+    } catch {
+        // Ignore inaccessible globals.
+    }
+
+    return '';
 }
 
 /**
@@ -64,12 +76,17 @@ export async function searchSpicychat(options = {}) {
 
     const url = `${TYPESENSE_BASE}/collections/${COLLECTION}/documents/search?${params.toString()}`;
 
+    const typesenseKey = getSpicychatTypesenseKey();
+    if (!typesenseKey) {
+        throw new Error('SpicyChat search requires a Typesense search key. This cleaned build does not ship hardcoded search keys.');
+    }
+
     const response = await proxiedFetch(url, {
         service: 'spicychat',
         fetchOptions: {
             method: 'GET',
             headers: {
-                'X-TYPESENSE-API-KEY': TYPESENSE_KEY,
+                'X-TYPESENSE-API-KEY': typesenseKey,
                 'Accept': 'application/json',
             },
         },

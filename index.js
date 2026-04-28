@@ -36,8 +36,8 @@ import { initUpdateChecker } from './modules/services/updateChecker.js';
 import { searchRisuRealm, transformRisuRealmCard, resetRisuRealmState, risuRealmApiState, fetchRisuRealmTrending } from './modules/services/risuRealmApi.js';
 import { searchChubCards, transformChubCard } from './modules/services/chubApi.js';
 import {
-    setChubToken, isChubLoggedIn, validateChubToken, getChubToken,
-    fetchFavoriteCards, fetchFavoriteIds, toggleFavorite, getChubFavoriteIds,
+    isChubLoggedIn,
+    fetchFavoriteCards, fetchFavoriteIds, getChubFavoriteIds,
     fetchTimeline, resetTimelineState, chubTimelineState,
     toggleFollow, fetchFollowsList, getChubFollowsList,
     fetchGalleryImages, rateCharacter, fetchAccountInfo
@@ -79,12 +79,8 @@ import {
     getTalkieCharacter, transformFullTalkieCharacter
 } from './modules/services/talkieApi.js';
 import {
-    authState, isLoggedIn, getDisplayName, initAuthFromSettings,
-    applyServiceLogin, clearServiceAuth,
-    loginSaucepan, loginHarpy,
-    verifyCharaVaultCookie, verifySakuraToken, verifyCrushonCookie,
-    fetchCharaVaultFavorites, fetchSakuraFavorites, fetchCrushonLikes,
-    toggleCharaVaultFavorite, toggleSakuraFavorite, toggleSaucepanFavorite
+    authState, isLoggedIn, initAuthFromSettings,
+    fetchCharaVaultFavorites, fetchSakuraFavorites, fetchCrushonLikes
 } from './modules/services/authManager.js';
 
 // Extension version (from manifest.json)
@@ -219,25 +215,12 @@ const defaultSettings = {
     trackStats: true,
     tagBlocklist: [],
     useChubLiveApi: true,
-    chubToken: '',
     useCharacterTavernLiveApi: true,
     useRisuRealmLiveApi: true,
     useMlpchagLiveApi: true,
     useWyvernLiveApi: true,
     autoClearFilters: true,
     randomServices: getDefaultRandomServiceSettings(),
-    // Auth tokens for 5 new services
-    saucepanToken: '',
-    saucepanDisplayName: '',
-    harpyToken: '',
-    harpyUserId: '',
-    harpyDisplayName: '',
-    charavaultCookie: '',
-    charavaultDisplayName: '',
-    sakuraToken: '',
-    sakuraDisplayName: '',
-    crushonCookie: '',
-    crushonDisplayName: '',
 };
 
 // Stats storage
@@ -262,6 +245,38 @@ function loadSettings() {
         }
     }
 
+    const removedAuthSettingKeys = [
+        'chubToken',
+        'saucepanToken',
+        'saucepanDisplayName',
+        'harpyToken',
+        'harpyUserId',
+        'harpyDisplayName',
+        'charavaultCookie',
+        'charavaultDisplayName',
+        'sakuraToken',
+        'sakuraDisplayName',
+        'crushonCookie',
+        'crushonDisplayName',
+        'wyvernToken',
+        'wyvernRefreshToken',
+        'wyvernUserId',
+        'wyvernDisplayName',
+        'wyvernFirebaseApiKey',
+        'pygmalionToken',
+        'pygmalionDisplayName',
+    ];
+    let removedAuthSettings = false;
+    for (const key of removedAuthSettingKeys) {
+        if (Object.prototype.hasOwnProperty.call(extension_settings[extensionName], key)) {
+            delete extension_settings[extensionName][key];
+            removedAuthSettings = true;
+        }
+    }
+    if (removedAuthSettings) {
+        saveSettingsDebounced();
+    }
+
     // Ensure random service settings include all known services (for upgrades)
     const randomServices = extension_settings[extensionName].randomServices;
     if (typeof randomServices !== 'object' || randomServices === null) {
@@ -274,38 +289,9 @@ function loadSettings() {
         }
     }
 
-    // Initialize Chub token from saved settings
-    const savedChubToken = extension_settings[extensionName].chubToken;
-    if (savedChubToken) {
-        setChubToken(savedChubToken);
-        // Pre-fetch favorites and follows in background
-        fetchFavoriteIds().catch(() => {});
-        fetchFollowsList().catch(() => {});
-        // Show auth-only buttons after DOM is ready
-        requestAnimationFrame(() => {
-            document.querySelectorAll('.bot-browser-chub-auth-only').forEach(el => {
-                el.style.display = '';
-            });
-        });
-    }
-
-    // Initialize auth for 5 new services
+    // Initialize auth stubs for the cleaned browse-only build.
     const settings = extension_settings[extensionName];
     initAuthFromSettings(settings, setHarpyUserToken);
-
-    // Show auth-only source buttons after DOM is ready
-    requestAnimationFrame(() => {
-        const authClasses = [
-            ['charavault', '.bb-charavault-auth-only'],
-            ['sakura', '.bb-sakura-auth-only'],
-            ['crushon', '.bb-crushon-auth-only'],
-        ];
-        for (const [service, cls] of authClasses) {
-            if (isLoggedIn(service)) {
-                document.querySelectorAll(cls).forEach(el => { el.style.display = ''; });
-            }
-        }
-    });
 }
 
 // Apply blur setting to all card images
@@ -2142,79 +2128,6 @@ function setupStandaloneImportBridge() {
 function showSettingsModal() {
     const settings = extension_settings[extensionName];
 
-    // Build auth section HTML for login-form services (Saucepan, Harpy)
-    function buildLoginAuthSection(svc) {
-        const loggedIn = isLoggedIn(svc.id);
-        const displayName = getDisplayName(svc.id);
-        const badgeCls = loggedIn ? 'logged-in' : 'logged-out';
-        const badgeHTML = loggedIn
-            ? '<i class="fa-solid fa-circle-check"></i> ' + escapeHTML(displayName || 'Logged in')
-            : '<i class="fa-solid fa-circle-xmark"></i> Not logged in';
-        return `<div class="bb-service-auth-section" id="bb-auth-section-${svc.id}">
-            <div class="bb-service-auth-header">
-                <div class="bb-service-auth-icon" style="background-image:url('${svc.icon}');background-color:${svc.iconBg || 'transparent'};background-size:cover;background-position:center;"></div>
-                <strong>${svc.label}</strong>
-                <span class="bb-auth-badge ${badgeCls}" id="bb-auth-badge-${svc.id}">${badgeHTML}</span>
-            </div>
-            <div class="bb-auth-form" id="bb-auth-form-${svc.id}" style="${loggedIn ? 'display:none;' : ''}">
-                <input type="${svc.field1.type}" id="${svc.field1.id}" placeholder="${svc.field1.placeholder}" class="text_pole" style="flex:1;min-width:90px;">
-                <input type="${svc.field2.type}" id="${svc.field2.id}" placeholder="${svc.field2.placeholder}" class="text_pole" style="flex:1;min-width:90px;">
-                <button class="bb-auth-login-btn" data-service="${svc.id}"><i class="fa-solid fa-right-to-bracket"></i> Login</button>
-            </div>
-            <div class="bb-auth-logged-in-row" id="bb-auth-loggedin-${svc.id}" style="${loggedIn ? '' : 'display:none;'}">
-                <button class="bb-auth-logout-btn" data-service="${svc.id}"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>
-            </div>
-        </div>`;
-    }
-
-    // Build auth section HTML for paste-based services (CharaVault, Sakura, CrushOn)
-    function buildPasteAuthSection(svc) {
-        const loggedIn = isLoggedIn(svc.id);
-        const displayName = getDisplayName(svc.id);
-        const savedVal = settings[svc.settingsKey] || '';
-        const badgeCls = loggedIn ? 'logged-in' : 'logged-out';
-        const badgeHTML = loggedIn
-            ? '<i class="fa-solid fa-circle-check"></i> ' + escapeHTML(displayName || 'Logged in')
-            : '<i class="fa-solid fa-circle-xmark"></i> Not logged in';
-        return `<div class="bb-service-auth-section" id="bb-auth-section-${svc.id}">
-            <div class="bb-service-auth-header">
-                <div class="bb-service-auth-icon" style="background-image:url('${svc.icon}');background-color:${svc.iconBg};background-size:75%;background-repeat:no-repeat;background-position:center;"></div>
-                <strong>${svc.label}</strong>
-                <span class="bb-auth-badge ${badgeCls}" id="bb-auth-badge-${svc.id}">${badgeHTML}</span>
-            </div>
-            <div class="bb-auth-hint">${svc.hint}</div>
-            <div class="bb-auth-paste-row">
-                <input type="password" id="bb-${svc.id}-token-input" class="text_pole"
-                       placeholder="${svc.placeholder}"
-                       value="${escapeHTML(savedVal)}"
-                       style="flex:1;font-family:monospace;font-size:0.8em;">
-                <button class="bb-auth-verify-btn" data-service="${svc.id}"><i class="fa-solid fa-check"></i> Verify</button>
-                <button class="bb-auth-logout-btn" data-service="${svc.id}" style="${!loggedIn ? 'display:none;' : ''}"><i class="fa-solid fa-xmark"></i> Clear</button>
-            </div>
-        </div>`;
-    }
-
-    const authSectionsLoginHTML = [
-        { id: 'saucepan', label: 'Saucepan.ai', icon: 'https://saucepan.ai/favicon-32x32.png', iconBg: '',
-          field1: { id: 'bb-saucepan-handle', placeholder: 'Handle (username)', type: 'text' },
-          field2: { id: 'bb-saucepan-password', placeholder: 'Password', type: 'password' } },
-        { id: 'harpy', label: 'Harpy.chat', icon: 'https://harpy.chat/icons/logo.svg', iconBg: '#1a1a2e',
-          field1: { id: 'bb-harpy-email', placeholder: 'Email', type: 'email' },
-          field2: { id: 'bb-harpy-password', placeholder: 'Password', type: 'password' } }
-    ].map(buildLoginAuthSection).join('');
-
-    const authSectionsPasteHTML = [
-        { id: 'charavault', label: 'CharaVault', icon: 'https://charavault.net/favicon.svg', iconBg: '#0a0a0f',
-          settingsKey: 'charavaultCookie', placeholder: 'session=abc123…',
-          hint: 'Log in at charavault.net → DevTools (F12) → Application → Cookies → charavault.net → copy the session cookie value.' },
-        { id: 'sakura', label: 'Sakura.fm', icon: 'https://sakura.fm/favicon.ico', iconBg: '#1a0a1a',
-          settingsKey: 'sakuraToken', placeholder: 'eyJ…',
-          hint: 'Log in at sakura.fm → open browser console (F12) → run: <code>copy(await window.Clerk.session.getToken())</code> → paste the result here.' },
-        { id: 'crushon', label: 'CrushOn.AI', icon: 'https://crushon.ai/favicon-64x64.png', iconBg: 'transparent',
-          settingsKey: 'crushonCookie', placeholder: 'session token value…',
-          hint: 'Log in at crushon.ai → DevTools (F12) → Application → Cookies → crushon.ai → copy the <code>next-auth.session-token</code> value.' }
-    ].map(buildPasteAuthSection).join('');
-
     // Create a completely new modal structure with dedicated classes
     const modalHTML = `
         <div id="bb-settings-backdrop" class="bb-settings-backdrop">
@@ -2407,23 +2320,6 @@ function showSettingsModal() {
                             </div>
                         </div>
 
-                        <div class="bb-setting-group">
-                            <label for="bb-setting-chub-token"><i class="fa-solid fa-key"></i> Chub API Token:</label>
-                            <div style="display: flex; gap: 8px; align-items: center;">
-                                <input type="password" id="bb-setting-chub-token" class="text_pole"
-                                       placeholder="glpat-..."
-                                       value="${escapeHTML(settings.chubToken || '')}"
-                                       style="flex: 1; font-family: monospace;">
-                                <button id="bb-chub-token-toggle" class="menu_button" style="padding: 6px 10px; min-width: auto;" title="Show/Hide">
-                                    <i class="fa-solid fa-eye"></i>
-                                </button>
-                                <button id="bb-chub-token-validate" class="menu_button" style="padding: 6px 10px; min-width: auto;" title="Test Token">
-                                    <i class="fa-solid fa-check-circle"></i>
-                                </button>
-                            </div>
-                            <small>Paste a Chub token only if you need personal Chub features.</small>
-                        </div>
-
                         <div class="bb-setting-group bb-api-service-card">
                             <div style="display: inline-block; background: linear-gradient(135deg, #2d1b4e, #1a1a2e); border-radius: 8px; padding: 8px 16px; margin-bottom: 10px;">
                                 <span style="font-size: 18px; font-weight: bold; color: #c9a0ff;">Character Tavern</span>
@@ -2468,13 +2364,10 @@ function showSettingsModal() {
                             <small>Fetch characters and lorebooks from app.wyvern.chat/api.</small>
                         </div>
 
-                        <div class="bb-setting-group">
-                            <label><i class="fa-solid fa-id-badge"></i> Service Accounts</label>
-                            <small>Login to access favorites and personalized content. Auth headers are not sent through public CORS relays.</small>
+                        <div class="bb-setting-note">
+                            <i class="fa-solid fa-shield-halved"></i>
+                            <span>Account login and token/cookie paste flows are disabled in this cleaned browse-only build.</span>
                         </div>
-
-                        ${authSectionsLoginHTML}
-                        ${authSectionsPasteHTML}
                     </div>
                 </div>
 
@@ -2526,176 +2419,6 @@ function showSettingsModal() {
             e.stopPropagation();
             const enabled = item.classList.toggle('enabled');
             item.setAttribute('aria-pressed', enabled ? 'true' : 'false');
-        });
-    });
-
-    // Chub token show/hide toggle
-    const chubTokenInput = document.getElementById('bb-setting-chub-token');
-    const chubTokenToggle = document.getElementById('bb-chub-token-toggle');
-    if (chubTokenToggle && chubTokenInput) {
-        chubTokenToggle.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const isPassword = chubTokenInput.type === 'password';
-            chubTokenInput.type = isPassword ? 'text' : 'password';
-            chubTokenToggle.querySelector('i').className = `fa-solid fa-eye${isPassword ? '-slash' : ''}`;
-        });
-    }
-
-    // Chub token validate button
-    const chubValidateBtn = document.getElementById('bb-chub-token-validate');
-    if (chubValidateBtn && chubTokenInput) {
-        chubValidateBtn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            const token = chubTokenInput.value.trim();
-            if (!token) {
-                toastr.warning('Enter a token first');
-                return;
-            }
-            chubValidateBtn.disabled = true;
-            chubValidateBtn.querySelector('i').className = 'fa-solid fa-spinner fa-spin';
-            try {
-                const data = await validateChubToken(token);
-                const username = data.user_name || data.name || data.username || 'Unknown';
-                toastr.success(`Token valid! Logged in as: ${username}`, 'Chub Auth', { timeOut: 4000 });
-            } catch (err) {
-                toastr.error(`Token invalid: ${err.message}`, 'Chub Auth');
-            } finally {
-                chubValidateBtn.disabled = false;
-                chubValidateBtn.querySelector('i').className = 'fa-solid fa-check-circle';
-            }
-        });
-    }
-
-    // ─── Auth: Login buttons (Saucepan + Harpy) ───────────────────────────────
-    function updateAuthSectionUI(service, displayName) {
-        const badge = document.getElementById(`bb-auth-badge-${service}`);
-        const form = document.getElementById(`bb-auth-form-${service}`);
-        const loggedinRow = document.getElementById(`bb-auth-loggedin-${service}`);
-        if (badge) {
-            badge.className = 'bb-auth-badge logged-in';
-            badge.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${escapeHTML(displayName || 'Logged in')}`;
-        }
-        if (form) form.style.display = 'none';
-        if (loggedinRow) loggedinRow.style.display = '';
-
-        // Show favorites source buttons for this service
-        document.querySelectorAll(`.bb-${service}-auth-only`).forEach(el => { el.style.display = ''; });
-    }
-
-    function clearAuthSectionUI(service) {
-        const badge = document.getElementById(`bb-auth-badge-${service}`);
-        const form = document.getElementById(`bb-auth-form-${service}`);
-        const loggedinRow = document.getElementById(`bb-auth-loggedin-${service}`);
-        if (badge) {
-            badge.className = 'bb-auth-badge logged-out';
-            badge.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> Not logged in';
-        }
-        if (form) form.style.display = '';
-        if (loggedinRow) loggedinRow.style.display = 'none';
-
-        // Hide favorites source buttons
-        document.querySelectorAll(`.bb-${service}-auth-only`).forEach(el => { el.style.display = 'none'; });
-    }
-
-    panel.querySelectorAll('.bb-auth-login-btn').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            const service = btn.dataset.service;
-            const origHTML = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
-            try {
-                let result;
-                if (service === 'saucepan') {
-                    const handle = document.getElementById('bb-saucepan-handle')?.value.trim();
-                    const password = document.getElementById('bb-saucepan-password')?.value;
-                    if (!handle || !password) { toastr.warning('Enter handle and password'); return; }
-                    result = await loginSaucepan(handle, password);
-                    applyServiceLogin('saucepan', result.token, { displayName: result.displayName });
-                    settings.saucepanToken = result.token;
-                    settings.saucepanDisplayName = result.displayName || '';
-                } else if (service === 'harpy') {
-                    const email = document.getElementById('bb-harpy-email')?.value.trim();
-                    const password = document.getElementById('bb-harpy-password')?.value;
-                    if (!email || !password) { toastr.warning('Enter email and password'); return; }
-                    result = await loginHarpy(email, password);
-                    applyServiceLogin('harpy', result.token, { userId: result.userId, displayName: result.displayName, harpySetTokenFn: setHarpyUserToken });
-                    settings.harpyToken = result.token;
-                    settings.harpyUserId = result.userId || '';
-                    settings.harpyDisplayName = result.displayName || '';
-                }
-                saveSettingsDebounced();
-                updateAuthSectionUI(service, result?.displayName || result?.email || 'Logged in');
-                toastr.success(`Logged in${result?.displayName ? ' as ' + result.displayName : ''}`, escapeHTML(service));
-            } catch (err) {
-                toastr.error(`Login failed: ${err.message}`, escapeHTML(service));
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = origHTML;
-            }
-        });
-    });
-
-    // ─── Auth: Verify buttons (paste-based services) ───────────────────────────
-    panel.querySelectorAll('.bb-auth-verify-btn').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            const service = btn.dataset.service;
-            const inputEl = document.getElementById(`bb-${service}-token-input`);
-            const tokenVal = inputEl?.value.trim();
-            if (!tokenVal) { toastr.warning('Paste your token/cookie first'); return; }
-            const origHTML = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
-            try {
-                let displayName = null;
-                if (service === 'charavault') {
-                    const me = await verifyCharaVaultCookie(tokenVal);
-                    displayName = me.display_name || me.email || 'Logged in';
-                    applyServiceLogin('charavault', tokenVal, { displayName });
-                    settings.charavaultCookie = tokenVal;
-                    settings.charavaultDisplayName = displayName;
-                } else if (service === 'sakura') {
-                    await verifySakuraToken(tokenVal);
-                    displayName = 'Logged in';
-                    applyServiceLogin('sakura', tokenVal, { displayName });
-                    settings.sakuraToken = tokenVal;
-                    settings.sakuraDisplayName = displayName;
-                } else if (service === 'crushon') {
-                    const session = await verifyCrushonCookie(tokenVal);
-                    displayName = session?.user?.name || session?.user?.email || 'Logged in';
-                    applyServiceLogin('crushon', tokenVal, { displayName });
-                    settings.crushonCookie = tokenVal;
-                    settings.crushonDisplayName = displayName;
-                }
-                saveSettingsDebounced();
-                updateAuthSectionUI(service, displayName);
-                // Show the clear button
-                const clearBtn = document.querySelector(`#bb-auth-section-${service} .bb-auth-logout-btn`);
-                if (clearBtn) clearBtn.style.display = '';
-                toastr.success(`Verified! Logged in as ${displayName}`, escapeHTML(service));
-            } catch (err) {
-                toastr.error(`Verification failed: ${err.message}`, escapeHTML(service));
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = origHTML;
-            }
-        });
-    });
-
-    // ─── Auth: Logout / Clear buttons ─────────────────────────────────────────
-    panel.querySelectorAll('.bb-auth-logout-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const service = btn.dataset.service;
-            clearServiceAuth(service, settings);
-            if (service === 'harpy') setHarpyUserToken(null);
-            saveSettingsDebounced();
-            clearAuthSectionUI(service);
-            // Clear paste field if applicable
-            const inputEl = document.getElementById(`bb-${service}-token-input`);
-            if (inputEl) inputEl.value = '';
-            toastr.info(`Logged out of ${service}`, '');
         });
     });
 
@@ -2766,20 +2489,6 @@ function showSettingsModal() {
             randomServices[serviceId] = item.classList.contains('enabled');
         });
         settings.randomServices = randomServices;
-
-        // Chub token
-        const newChubToken = (document.getElementById('bb-setting-chub-token')?.value || '').trim();
-        if (newChubToken !== settings.chubToken) {
-            settings.chubToken = newChubToken;
-            setChubToken(newChubToken);
-            // Show/hide auth-only buttons
-            document.querySelectorAll('.bot-browser-chub-auth-only').forEach(el => {
-                el.style.display = newChubToken ? '' : 'none';
-            });
-            if (newChubToken) {
-                fetchFavoriteIds(true).catch(() => {});
-            }
-        }
 
         saveSettingsDebounced();
         applyBlurSetting();

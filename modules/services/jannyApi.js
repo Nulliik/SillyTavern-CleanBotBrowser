@@ -2,7 +2,6 @@ import { proxiedFetch, getAuthHeadersForService, PROXY_TYPES } from './corsProxy
 
 const JANNY_SEARCH_URL = 'https://search.jannyai.com/multi-search';
 const JANNY_API_BASE = 'https://jannyai.com/api';
-const JANNY_FALLBACK_TOKEN = '88a6463b66e04fb07ba87ee3db06af337f492ce511d93df6e2d2968cb2ff2b30';
 export const JANNY_IMAGE_BASE = 'https://image.jannyai.com/bot-avatars/';
 const DEBUG = typeof window !== 'undefined' && window.__BOT_BROWSER_DEBUG === true;
 const JANNY_PROXY_CHAIN = [
@@ -204,9 +203,7 @@ async function getSearchToken() {
             if (DEBUG) console.log('[Bot Browser] Fetched fresh JannyAI search token');
             return cachedToken;
         } catch (error) {
-            console.warn('[Bot Browser] Failed to fetch JannyAI token, using fallback:', error.message);
-            cachedToken = JANNY_FALLBACK_TOKEN;
-            return cachedToken;
+            throw new Error(`Failed to fetch JannyAI search token from the live site: ${error.message}`);
         } finally {
             tokenFetchPromise = null;
         }
