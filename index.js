@@ -113,11 +113,12 @@ const state = {
 };
 
 // Random service options (used for roulette + settings)
+//#TODO Most likely it will be a better idea to store those locally
 const randomServiceOptions = [
     {
         id: 'risuai_realm',
         name: 'Risuai Realm',
-        iconUrl: 'https://files.catbox.moe/216rab.webp',
+        iconUrl: 'https://risuai.net/_app/immutable/assets/logo_typo_trans.RA6vyG_G.png',//#TODO replace with correct
         iconSize: 'cover',
     },
     {
@@ -130,7 +131,7 @@ const randomServiceOptions = [
     {
         id: 'webring',
         name: 'Webring',
-        iconUrl: 'https://files.catbox.moe/6avrsl.png',
+        iconUrl: 'https://jannyai.com/logo.png', //#TODO replace with correct
         iconSize: '85%',
     },
     {
@@ -155,13 +156,13 @@ const randomServiceOptions = [
     {
         id: 'wyvern',
         name: 'Wyvern Chat',
-        iconUrl: 'https://substackcdn.com/image/fetch/w_176,h_176,c_fill,f_webp,q_auto:good,fl_progressive:steep,g_auto/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F6ea09a00-0248-4482-a893-1a2d1e3fe3c1_512x512.png',
+        iconUrl: 'https://app.wyvern.chat/icon-192x192.png',
         iconSize: 'cover',
     },
     {
         id: 'catbox',
         name: 'Catbox',
-        iconUrl: 'https://catbox.tech/favicon128.png',
+        iconUrl: 'https://jannyai.com/logo.png', //#TODO replace with correct
         iconSize: 'cover',
     },
     {
@@ -173,19 +174,19 @@ const randomServiceOptions = [
     {
         id: 'mlpchag',
         name: 'MLPchag',
-        iconUrl: 'https://derpicdn.net/img/view/2015/9/26/988523__safe_solo_upvotes+galore_smiling_cute_derpy+hooves_looking+at+you_looking+up_part+of+a_set_derpibooru+exclusive.png',
+        iconUrl: 'https://jannyai.com/logo.png', //#TODO replace with correct, they have no logo
         iconSize: 'cover',
     },
     {
         id: 'desuarchive',
         name: 'Desuarchive',
-        iconUrl: 'https://s2.vndb.org/ch/32/17032.jpg',
+        iconUrl: 'https://jannyai.com/logo.png', //#TODO replace with correct
         iconSize: 'cover',
     },
     {
         id: 'jannyai',
         name: 'JannyAI',
-        iconUrl: 'https://tse3.mm.bing.net/th/id/OIP.nb-qi0od9W6zRsskVwL6QAHaHa?rs=1&pid=ImgDetMain&o=7&rm=3',
+        iconUrl: 'https://jannyai.com/logo.png',
         iconSize: 'cover',
     },
     {
@@ -197,7 +198,7 @@ const randomServiceOptions = [
     {
         id: 'pygmalion',
         name: 'Pygmalion',
-        iconUrl: 'https://files.catbox.moe/sw0crk.png',
+        iconUrl: 'https://avatars.githubusercontent.com/u/118556045?s=200&v=4',
         iconSize: '85%',
     },
 ];
