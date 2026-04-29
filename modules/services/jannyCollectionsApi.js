@@ -43,13 +43,15 @@ export async function fetchJannyCollections(options = {}) {
 }
 
 function stripHtmlComments(text) {
-    const template = document.createElement('template');
-    template.innerHTML = String(text || '');
-    const walker = document.createTreeWalker(template.content, NodeFilter.SHOW_COMMENT);
+    if (typeof DOMParser === 'undefined') return String(text || '');
+    const doc = new DOMParser().parseFromString(String(text || ''), 'text/html');
+    const walker = document.createTreeWalker(doc, NodeFilter.SHOW_COMMENT);
     const comments = [];
     while (walker.nextNode()) comments.push(walker.currentNode);
     comments.forEach((comment) => comment.remove());
-    return template.innerHTML;
+    return Array.from(doc.body?.childNodes || [])
+        .map((node) => node.outerHTML || node.textContent || '')
+        .join('');
 }
 
 /**

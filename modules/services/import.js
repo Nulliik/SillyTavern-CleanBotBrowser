@@ -17,7 +17,7 @@ import { transformFullJoylandBot } from '../services/joylandApi.js';
 import { transformFullSpicychatCharacter } from '../services/spicychatApi.js';
 import { getTalkieCharacter, transformFullTalkieCharacter } from '../services/talkieApi.js';
 import { extractCharacterDataFromPngArrayBuffer } from './embeddedCardParser.js';
-import { hostnameMatches, secureRandomToken } from '../utils/utils.js';
+import { hostnameMatches, htmlToPlainText, secureRandomToken } from '../utils/utils.js';
 
 /**
  * Import a character file directly without tag popup
@@ -120,15 +120,11 @@ async function fetchImageWithProxyChain(imageUrl) {
 
 function sanitizeCardText(value, maxLength = 60000) {
     if (value === null || value === undefined) return '';
-    const template = document.createElement('template');
-    template.innerHTML = String(value)
+    const cleaned = String(value)
         .replace(/\u0000/g, '')
         .replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
         .slice(0, maxLength);
-    template.content
-        .querySelectorAll('script, style, iframe, object, embed, link, meta, base')
-        .forEach((element) => element.remove());
-    return template.content.textContent || '';
+    return htmlToPlainText(cleaned);
 }
 
 function sanitizeCardTextArray(value, maxItems = 50) {

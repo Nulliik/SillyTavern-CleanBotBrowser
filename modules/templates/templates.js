@@ -347,7 +347,7 @@ export function createBrowserHeader(serviceDisplayName, searchValue, cardCountTe
             <button class="bot-browser-back-button">
                 <i class="fa-solid fa-arrow-left"></i>
             </button>
-            <h3>${serviceDisplayName}</h3>
+            <h3>${escapeHTML(serviceDisplayName)}</h3>
             ${hideNsfw ? '<div class="bot-browser-nsfw-indicator" title="NSFW cards are hidden (change in settings)"><i class="fa-solid fa-eye-slash"></i> NSFW Hidden</div>' : ''}
             <button class="bot-browser-multi-select-toggle" title="Toggle Multi-Select Mode">
                 <i class="fa-solid fa-check-double"></i>

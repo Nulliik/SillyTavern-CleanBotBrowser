@@ -37,16 +37,36 @@ export function escapeHTML(text) {
 
 export function decodeHtmlEntities(text) {
     if (!text) return '';
-    const textarea = document.createElement('textarea');
-    textarea.innerHTML = String(text);
-    return textarea.value;
+    const namedEntities = {
+        amp: '&',
+        lt: '<',
+        gt: '>',
+        quot: '"',
+        apos: "'",
+        nbsp: ' ',
+    };
+    return String(text).replace(/&(#x[0-9a-f]+|#[0-9]+|[a-z][a-z0-9]+);/gi, (entity, body) => {
+        const normalized = body.toLowerCase();
+        if (normalized.startsWith('#x')) {
+            const codePoint = Number.parseInt(normalized.slice(2), 16);
+            return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : entity;
+        }
+        if (normalized.startsWith('#')) {
+            const codePoint = Number.parseInt(normalized.slice(1), 10);
+            return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : entity;
+        }
+        return Object.prototype.hasOwnProperty.call(namedEntities, normalized)
+            ? namedEntities[normalized]
+            : entity;
+    });
 }
 
 export function htmlToPlainText(html) {
     if (!html) return '';
-    const template = document.createElement('template');
-    template.innerHTML = String(html);
-    return (template.content.textContent || '').replace(/\s+/g, ' ').trim();
+    if (typeof DOMParser === 'undefined') return String(html).replace(/\s+/g, ' ').trim();
+    const doc = new DOMParser().parseFromString(String(html), 'text/html');
+    doc.querySelectorAll('script, style, iframe, object, embed, link, meta, base').forEach((element) => element.remove());
+    return (doc.body?.textContent || '').replace(/\s+/g, ' ').trim();
 }
 
 export function parseHttpUrl(url) {
