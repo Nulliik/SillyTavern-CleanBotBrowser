@@ -154,7 +154,7 @@ export async function getSakuraCreatorCharacters(creatorId, options = {}) {
 }
 
 /**
- * Transform browse card to BotBrowser format
+ * Transform browse card to CleanBotBrowser format
  */
 export function transformSakuraCard(card) {
     const messageCount = Number(card.messageCount || 0) || 0;

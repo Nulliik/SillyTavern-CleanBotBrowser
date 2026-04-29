@@ -120,7 +120,7 @@ export async function checkFavoriteCreatorUpdates(options = {}) {
                 latestCardName: newest.name || favorite.latestCardName || '',
             });
         } catch (error) {
-            console.warn(`[Bot Browser] Favorite creator update check failed for ${favorite.creator}:`, error);
+            console.warn(`[CleanBotBrowser] Favorite creator update check failed for ${favorite.creator}:`, error);
         }
     }
 

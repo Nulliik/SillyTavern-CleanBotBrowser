@@ -1,4 +1,4 @@
-// Statistics tracking for Bot Browser extension
+// Statistics tracking for CleanBotBrowser extension
 import { saveImportStats, trackImportedCard } from './storage.js';
 
 // Track an import

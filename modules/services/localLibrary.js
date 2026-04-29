@@ -1,4 +1,4 @@
-// Local Library Service - loads BotBrowser imported cards and local SillyTavern content for browsing
+// Local Library Service - loads CleanBotBrowser imported cards and local SillyTavern content for browsing
 import { getRequestHeaders, getCharacters, characters } from '/script.js';
 import { loadWorldInfo, saveWorldInfo, updateWorldInfoList, world_names } from '/scripts/world-info.js';
 import { loadImportedCards, clearImportedCards } from '../storage/storage.js';
@@ -78,7 +78,7 @@ export async function loadLocalCharacters() {
     try {
         await getCharacters();
     } catch (error) {
-        console.warn('[Bot Browser] Failed to refresh SillyTavern characters, using current list:', error);
+        console.warn('[CleanBotBrowser] Failed to refresh SillyTavern characters, using current list:', error);
     }
 
     return Array.isArray(characters)
@@ -138,7 +138,7 @@ async function getWorldNames() {
     try {
         await updateWorldInfoList();
     } catch (error) {
-        console.warn('[Bot Browser] Failed to refresh World Info list via UI helper:', error);
+        console.warn('[CleanBotBrowser] Failed to refresh World Info list via UI helper:', error);
     }
 
     if (Array.isArray(world_names) && world_names.length > 0) {
@@ -156,7 +156,7 @@ async function getWorldNames() {
             return Array.isArray(data.world_names) ? data.world_names : [];
         }
     } catch (error) {
-        console.warn('[Bot Browser] Failed to load World Info names from settings:', error);
+        console.warn('[CleanBotBrowser] Failed to load World Info names from settings:', error);
     }
 
     return [];
@@ -173,7 +173,7 @@ export async function loadLocalLorebooks() {
             const data = await loadWorldInfo(name);
             return data ? transformLocalLorebook(name, data) : null;
         } catch (error) {
-            console.warn(`[Bot Browser] Failed to load local lorebook "${name}":`, error);
+            console.warn(`[CleanBotBrowser] Failed to load local lorebook "${name}":`, error);
             return null;
         }
     }));

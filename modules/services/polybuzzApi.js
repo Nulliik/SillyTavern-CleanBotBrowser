@@ -298,8 +298,8 @@ function buildPolybuzzSearchLimitNotice({ hasCookieHeader = false, isGuestSessio
 
     if (isGuestSession) {
         return mode === 'search'
-            ? 'PolyBuzz is using a guest session. The site blocks page 2 of public search for this session, so Bot Browser can only show the visible first page until you paste a full logged-in PolyBuzz Cookie header in Settings -> Connections -> PolyBuzz.'
-            : 'PolyBuzz is using a guest session. The site blocks page 2 of public discover for this session, so Bot Browser can only show the visible first page until you paste a full logged-in PolyBuzz Cookie header in Settings -> Connections -> PolyBuzz.';
+            ? 'PolyBuzz is using a guest session. The site blocks page 2 of public search for this session, so CleanBotBrowser can only show the visible first page until you paste a full logged-in PolyBuzz Cookie header in Settings -> Connections -> PolyBuzz.'
+            : 'PolyBuzz is using a guest session. The site blocks page 2 of public discover for this session, so CleanBotBrowser can only show the visible first page until you paste a full logged-in PolyBuzz Cookie header in Settings -> Connections -> PolyBuzz.';
     }
 
     if (hasCookieHeader) {
@@ -311,8 +311,8 @@ function buildPolybuzzSearchLimitNotice({ hasCookieHeader = false, isGuestSessio
 
 function buildPolybuzzGuestExpandedSearchNotice({ hasCookieHeader = false } = {}) {
     return hasCookieHeader
-        ? 'PolyBuzz blocks real page 2 of guest search. Bot Browser is widening this query with PolyBuzz suggestion terms so Next can keep going, but later pages are related suggestion results instead of exact site pagination. Add a full logged-in PolyBuzz Cookie header in Settings -> Connections -> PolyBuzz for exact site paging.'
-        : 'PolyBuzz public search blocks real page 2. Bot Browser is widening this query with PolyBuzz suggestion terms so Next can keep going, but later pages are related suggestion results instead of exact site pagination. Add a full logged-in PolyBuzz Cookie header in Settings -> Connections -> PolyBuzz for exact site paging.';
+        ? 'PolyBuzz blocks real page 2 of guest search. CleanBotBrowser is widening this query with PolyBuzz suggestion terms so Next can keep going, but later pages are related suggestion results instead of exact site pagination. Add a full logged-in PolyBuzz Cookie header in Settings -> Connections -> PolyBuzz for exact site paging.'
+        : 'PolyBuzz public search blocks real page 2. CleanBotBrowser is widening this query with PolyBuzz suggestion terms so Next can keep going, but later pages are related suggestion results instead of exact site pagination. Add a full logged-in PolyBuzz Cookie header in Settings -> Connections -> PolyBuzz for exact site paging.';
 }
 
 function buildPolybuzzCreatorLimitNotice({ hasCookieHeader = false, isGuestSession = false } = {}) {

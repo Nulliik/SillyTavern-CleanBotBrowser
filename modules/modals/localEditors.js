@@ -101,7 +101,7 @@ export function showLocalCharacterEditor(card) {
             toastr.success('Character saved');
             closeLocalEditor();
         } catch (error) {
-            console.error('[Bot Browser] Failed to save local character:', error);
+            console.error('[CleanBotBrowser] Failed to save local character:', error);
             toastr.error('Failed to save character');
         } finally {
             saveButton.disabled = false;
@@ -250,7 +250,7 @@ export function showLocalLorebookEditor(card) {
             toastr.success('Lorebook saved');
             closeLocalEditor();
         } catch (error) {
-            console.error('[Bot Browser] Failed to save local lorebook:', error);
+            console.error('[CleanBotBrowser] Failed to save local lorebook:', error);
             toastr.error('Failed to save lorebook');
         } finally {
             saveButton.disabled = false;

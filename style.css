@@ -4921,7 +4921,6 @@ body .st-proxy-modal-backdrop,
 
 /* Auth-only source buttons - hidden state handled via inline style + JS */
 .bot-browser-chub-auth-only,
-.bb-charavault-auth-only,
 .bb-sakura-auth-only,
 .bb-crushon-auth-only {
     position: relative;

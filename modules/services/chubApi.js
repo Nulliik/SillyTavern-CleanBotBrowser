@@ -85,7 +85,7 @@ async function performChubSearch(options = {}) {
     }
 
     const data = await response.json();
-    if (DEBUG) console.log('[Bot Browser] Chub API response data:', data);
+    if (DEBUG) console.log('[CleanBotBrowser] Chub API response data:', data);
     return data;
 }
 
@@ -126,7 +126,7 @@ export async function getChubCharacter(fullPath) {
     }
 
     const data = await response.json();
-    if (DEBUG) console.log('[Bot Browser] Gateway API response for', fullPath, data);
+    if (DEBUG) console.log('[CleanBotBrowser] Gateway API response for', fullPath, data);
     return data;
 }
 
@@ -156,9 +156,9 @@ function hasChubTopic(node, topicName) {
 }
 
 /**
- * Transform Chub API search result node to BotBrowser card format
+ * Transform Chub API search result node to CleanBotBrowser card format
  * @param {Object} node - Chub API node object
- * @returns {Object} Card in BotBrowser format
+ * @returns {Object} Card in CleanBotBrowser format
  */
 export function transformChubCard(node) {
     const fullPath = node.fullPath || `${node.name}`;
@@ -258,7 +258,7 @@ export function transformFullChubCharacter(charData) {
     // Character name
     const cardName = def.name || node.name || 'Unknown';
 
-    if (DEBUG) console.log('[Bot Browser] Chub field extraction:', {
+    if (DEBUG) console.log('[CleanBotBrowser] Chub field extraction:', {
         cardName,
         tagline: node.tagline?.substring(0, 100),
         personalityLength: (def.personality || '').length,
@@ -410,15 +410,15 @@ export async function getChubLorebook(nodeId) {
 
         return await response.json();
     } catch (error) {
-        console.warn('[Bot Browser] Lorebook fetch error:', nodeId);
+        console.warn('[CleanBotBrowser] Lorebook fetch error:', nodeId);
         throw error;
     }
 }
 
 /**
- * Transform Chub lorebook search result node to BotBrowser card format
+ * Transform Chub lorebook search result node to CleanBotBrowser card format
  * @param {Object} node - Chub API lorebook node object
- * @returns {Object} Card in BotBrowser format
+ * @returns {Object} Card in CleanBotBrowser format
  */
 export function transformChubLorebook(node) {
     let fullPath = node.fullPath || `${node.name}`;

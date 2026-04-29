@@ -71,7 +71,7 @@ export function filterCards(cards, filters, fuse, extensionName, extension_setti
 
     const blocklist = extension_settings[extensionName].tagBlocklist || [];
     const hideNsfw = extension_settings[extensionName].hideNsfw || false;
-    console.log(`[Bot Browser] filterCards: blocklist=[${blocklist.join(', ')}], hideNsfw=${hideNsfw}, search="${filters.search || ''}", tags=[${filters.tags?.join(', ') || ''}], creator="${filters.creator || ''}", input=${cards.length} cards`);
+    console.log(`[CleanBotBrowser] filterCards: blocklist=[${blocklist.join(', ')}], hideNsfw=${hideNsfw}, search="${filters.search || ''}", tags=[${filters.tags?.join(', ') || ''}], creator="${filters.creator || ''}", input=${cards.length} cards`);
 
     // Text search using Fuse.js for fuzzy matching
     if (filters.search && fuse) {
@@ -113,7 +113,7 @@ export function filterCards(cards, filters, fuse, extensionName, extension_setti
                     const normalizedTags = card.tags.map(tag => tag.toLowerCase().trim());
                     const matchedTag = normalizedBlocklist.find(blocked => normalizedTags.includes(blocked));
                     if (matchedTag) {
-                        console.log(`[Bot Browser] Blocklist: Hiding "${card.name}" - tag match: "${matchedTag}"`);
+                        console.log(`[CleanBotBrowser] Blocklist: Hiding "${card.name}" - tag match: "${matchedTag}"`);
                         return false;
                     }
                 }
@@ -128,7 +128,7 @@ export function filterCards(cards, filters, fuse, extensionName, extension_setti
                     return wordBoundaryRegex.test(desc);
                 });
                 if (matchedDescTerm) {
-                    console.log(`[Bot Browser] Blocklist: Hiding "${card.name}" - desc match: "${matchedDescTerm}" in "${desc.substring(0, 100)}..."`);
+                    console.log(`[CleanBotBrowser] Blocklist: Hiding "${card.name}" - desc match: "${matchedDescTerm}" in "${desc.substring(0, 100)}..."`);
                     return false;
                 }
 
@@ -140,7 +140,7 @@ export function filterCards(cards, filters, fuse, extensionName, extension_setti
                     return wordBoundaryRegex.test(name);
                 });
                 if (matchedNameTerm) {
-                    console.log(`[Bot Browser] Blocklist: Hiding "${card.name}" - name match: "${matchedNameTerm}"`);
+                    console.log(`[CleanBotBrowser] Blocklist: Hiding "${card.name}" - name match: "${matchedNameTerm}"`);
                     return false;
                 }
             }
@@ -170,7 +170,7 @@ export function deduplicateCards(cards) {
 
         if (seen.has(key)) {
             const firstCard = seen.get(key);
-            console.log('[Bot Browser] Removing duplicate card:', card.name, 'id:', card.id,
+            console.log('[CleanBotBrowser] Removing duplicate card:', card.name, 'id:', card.id,
                        '(keeping first from', firstCard.service || firstCard.sourceService, ')');
         } else {
             seen.set(key, card);
@@ -180,7 +180,7 @@ export function deduplicateCards(cards) {
 
     const removedCount = cards.length - deduplicated.length;
     if (removedCount > 0) {
-        console.log(`[Bot Browser] Removed ${removedCount} duplicate cards, kept ${deduplicated.length} unique cards`);
+        console.log(`[CleanBotBrowser] Removed ${removedCount} duplicate cards, kept ${deduplicated.length} unique cards`);
     }
 
     return deduplicated;
@@ -248,7 +248,7 @@ function tryLoadImageWithProxy(imageDiv, originalUrl, proxyIndex = 0, checkedExi
             if (!exists && (status === 404 || status === 410 || status === 403)) {
                 const message = status === 403 ? 'Image Restricted' : 'Image Removed';
                 showImageError(imageDiv, message, originalUrl);
-                console.log(`[Bot Browser] Image ${status} (removed/restricted):`, originalUrl);
+                console.log(`[CleanBotBrowser] Image ${status} (removed/restricted):`, originalUrl);
                 return;
             }
             // Image exists or we can't tell, try proxies
@@ -278,9 +278,9 @@ function tryLoadImageWithProxy(imageDiv, originalUrl, proxyIndex = 0, checkedExi
             const objectUrl = URL.createObjectURL(blob);
             imageDiv.dataset.objectUrl = objectUrl;
             imageDiv.style.backgroundImage = `url('${objectUrl}')`;
-            console.log(`[Bot Browser] Image loaded via ${proxyType}:`, originalUrl);
+            console.log(`[CleanBotBrowser] Image loaded via ${proxyType}:`, originalUrl);
         }).catch(() => {
-            console.log(`[Bot Browser] ${proxyType} failed for:`, originalUrl);
+            console.log(`[CleanBotBrowser] ${proxyType} failed for:`, originalUrl);
             tryLoadImageWithProxy(imageDiv, originalUrl, proxyIndex + 1, true);
         });
         return;
@@ -299,12 +299,12 @@ function tryLoadImageWithProxy(imageDiv, originalUrl, proxyIndex = 0, checkedExi
     testImg.onload = () => {
         // Proxy worked! Update the image
         imageDiv.style.backgroundImage = `url('${proxyUrl}')`;
-        console.log(`[Bot Browser] Image loaded via ${proxyType}:`, originalUrl);
+        console.log(`[CleanBotBrowser] Image loaded via ${proxyType}:`, originalUrl);
     };
 
     testImg.onerror = () => {
         // This proxy failed, try next
-        console.log(`[Bot Browser] ${proxyType} failed for:`, originalUrl);
+        console.log(`[CleanBotBrowser] ${proxyType} failed for:`, originalUrl);
         tryLoadImageWithProxy(imageDiv, originalUrl, proxyIndex + 1, true);
     };
 
@@ -337,7 +337,7 @@ function getImageObserver() {
 
                             testImg.onerror = () => {
                                 // Image failed to load - try with CORS proxy
-                                console.log('[Bot Browser] Image failed, trying proxies:', imageUrl);
+                                console.log('[CleanBotBrowser] Image failed, trying proxies:', imageUrl);
                                 tryLoadImageWithProxy(imageDiv, imageUrl, 0);
                             };
 
@@ -398,7 +398,7 @@ function showImageError(imageDiv, errorCode, imageUrl, silent = false) {
     }
 
     if (!silent) {
-        console.log(`[Bot Browser] Showing fallback for card with failed image (${errorCode}):`, imageUrl);
+        console.log(`[CleanBotBrowser] Showing fallback for card with failed image (${errorCode}):`, imageUrl);
     }
 }
 
@@ -425,12 +425,12 @@ export async function getRandomCard(source, currentCards, loadServiceIndexFunc, 
                     serviceCards = await loadServiceIndexFunc(service);
                 } catch (error) {
                     failedServices.push(service);
-                    console.warn(`[Bot Browser] Random card source failed and will be skipped: ${service}`, error);
+                    console.warn(`[CleanBotBrowser] Random card source failed and will be skipped: ${service}`, error);
                     continue;
                 }
 
                 if (!Array.isArray(serviceCards)) {
-                    console.warn(`[Bot Browser] Random card source returned invalid data and will be skipped: ${service}`);
+                    console.warn(`[CleanBotBrowser] Random card source returned invalid data and will be skipped: ${service}`);
                     continue;
                 }
 
@@ -445,7 +445,7 @@ export async function getRandomCard(source, currentCards, loadServiceIndexFunc, 
             }
 
             if (failedServices.length > 0) {
-                console.warn(`[Bot Browser] Random card skipped ${failedServices.length} failed source(s): ${failedServices.join(', ')}`);
+                console.warn(`[CleanBotBrowser] Random card skipped ${failedServices.length} failed source(s): ${failedServices.join(', ')}`);
             }
         } else {
             // Random from specific service
@@ -466,10 +466,10 @@ export async function getRandomCard(source, currentCards, loadServiceIndexFunc, 
         const randomIndex = Math.floor(Math.random() * cards.length);
         const randomCard = cards[randomIndex];
 
-        console.log('[Bot Browser] Selected random card:', randomCard.name);
+        console.log('[CleanBotBrowser] Selected random card:', randomCard.name);
         return randomCard;
     } catch (error) {
-        console.error('[Bot Browser] Error getting random card:', error);
+        console.error('[CleanBotBrowser] Error getting random card:', error);
         toastr.error('Failed to get random card');
         return null;
     }

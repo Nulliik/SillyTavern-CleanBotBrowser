@@ -1,12 +1,12 @@
 {
-    "display_name": "Bot Browser",
+    "display_name": "CleanBotBrowser",
     "loading_order": 100,
     "requires": [],
     "optional": [],
     "js": "index.js",
     "css": "style.css",
     "author": "Cleaned local copy",
-    "version": "2.0.5",
+    "version": "1.0",
     "homePage": "",
     "description": "Cleaned build with remote archive and updater disabled, plus safe in-page full-screen mode."
 }

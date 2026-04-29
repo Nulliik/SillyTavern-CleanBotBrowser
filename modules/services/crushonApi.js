@@ -67,7 +67,7 @@ function buildTrpcRequest(procedure, input, options = {}) {
     return { url, fetchOptions };
 }
 
-const CRUSHON_CREATOR_CACHE_KEY = 'botbrowser-crushon-creator-id-cache';
+const CRUSHON_CREATOR_CACHE_KEY = 'CleanBotBrowser-crushon-creator-id-cache';
 let crushonCreatorIdCache = null;
 
 function getCrushonCreatorIdCache() {
@@ -188,7 +188,7 @@ function getCrushonProxyChain(proxyChain = null) {
 function buildCrushonAuthRelayGuidance(operation, directTransportError = null) {
     const directMessage = String(directTransportError?.message || '').trim();
     const detail = directMessage ? ` Direct auth transports failed first: ${directMessage}` : '';
-    return `${operation} could not be loaded through the BotBrowser plugin. Public CORS relay fallback is disabled for authenticated requests in this cleaned build.${detail}`;
+    return `${operation} could not be loaded through the CleanBotBrowser plugin. Public CORS relay fallback is disabled for authenticated requests in this cleaned build.${detail}`;
 }
 
 function buildCrushonSearchHeaders(options = {}) {
@@ -789,7 +789,7 @@ async function getCrushonUserCharactersViaRelay(userId, nsfw = false, locale = '
         extraHeaders: {
             'x-nsfw': nsfw ? 'true' : 'false',
             'x-language': locale,
-            'x-device-id': 'botbrowser',
+            'x-device-id': 'CleanBotBrowser',
         },
         validate: (payload) => {
             const { characters, total } = extractCrushonCollectionPayload(payload);
@@ -869,7 +869,7 @@ async function fetchCrushonProfilePageHtml(userId) {
     for (const proxyType of proxies) {
         try {
             const response = await proxiedFetch(url, {
-                // Treat creator profile HTML as a public page so Bot Browser does not
+                // Treat creator profile HTML as a public page so CleanBotBrowser does not
                 // accidentally prioritize auth-bearing transports like Puter/plugin first.
                 service: 'default',
                 proxyChain: [proxyType],
@@ -1326,7 +1326,7 @@ function pickCrushonCreatorAvatar(card) {
 }
 
 /**
- * Transform browse card to BotBrowser format
+ * Transform browse card to CleanBotBrowser format
  */
 export function transformCrushonCard(card) {
     const galleryImages = uniqueCrushonValues([

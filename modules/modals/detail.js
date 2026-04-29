@@ -7,7 +7,6 @@ import { fetchJannyCharacterDetails, transformFullJannyCharacter } from '../serv
 import { fetchRisuRealmCharacter, transformFullRisuRealmCharacter } from '../services/risuRealmApi.js';
 import { getBackyardCharacter, transformFullBackyardCharacter } from '../services/backyardApi.js';
 import { getPygmalionCharacter, transformFullPygmalionCharacter } from '../services/pygmalionApi.js';
-import { getCharavaultCard } from '../services/charavaultApi.js';
 import { getSakuraCharacter, transformFullSakuraCharacter } from '../services/sakuraApi.js';
 import { getSaucepanCompanion, transformFullSaucepanCompanion } from '../services/saucepanApi.js';
 import { getCrushonCharacter, transformFullCrushonCharacter } from '../services/crushonApi.js';
@@ -52,7 +51,7 @@ function findCharacterByName(name) {
 
 export async function showCardDetail(card, extensionName, extension_settings, state, save=true, isRandom=false) {
     if (isOpeningModal) {
-        console.log('[Bot Browser] Modal already opening, ignoring duplicate click');
+        console.log('[CleanBotBrowser] Modal already opening, ignoring duplicate click');
         return;
     }
     isOpeningModal = true;
@@ -71,7 +70,7 @@ export async function showCardDetail(card, extensionName, extension_settings, st
                 ]);
                 fullCard._galleryImages = galleryImages;
             } catch (e) {
-                console.warn('[Bot Browser] Failed to fetch Chub gallery/favorites/follows:', e);
+                console.warn('[CleanBotBrowser] Failed to fetch Chub gallery/favorites/follows:', e);
                 fullCard._galleryImages = [];
             }
         } else if (isChubCard && fullCard.chubNodeId) {
@@ -86,7 +85,7 @@ export async function showCardDetail(card, extensionName, extension_settings, st
         const clickedName = (card.name || '').trim().toLowerCase();
         const loadedName = (fullCard.name || '').trim().toLowerCase();
         if (clickedName && loadedName && clickedName !== loadedName) {
-            console.warn('[Bot Browser] Card name mismatch - clicked:', card.name, 'but loaded:', fullCard.name);
+            console.warn('[CleanBotBrowser] Card name mismatch - clicked:', card.name, 'but loaded:', fullCard.name);
             // Don't show error toast - this can happen with minor formatting differences
         }
 
@@ -105,7 +104,7 @@ export async function showCardDetail(card, extensionName, extension_settings, st
 
         isOpeningModal = false;
     } catch (error) {
-        console.error('[Bot Browser] Error showing card detail:', error);
+        console.error('[CleanBotBrowser] Error showing card detail:', error);
         isOpeningModal = false;
         throw error;
     }
@@ -124,25 +123,25 @@ async function loadFullCard(card) {
 
     if (card.isLiveChub && card.isLorebook && card.nodeId) {
         try {
-            console.log('[Bot Browser] Fetching full Chub lorebook data for:', card.fullPath, 'nodeId:', card.nodeId);
+            console.log('[CleanBotBrowser] Fetching full Chub lorebook data for:', card.fullPath, 'nodeId:', card.nodeId);
             const lorebookData = await getChubLorebook(card.nodeId);
             if (lorebookData) {
                 // The lorebook data should have entries in SillyTavern format
                 // Preserve the original card's display name (search results name), but take entries from lorebookData
                 fullCard = { ...card, ...lorebookData, name: card.name };
-                console.log('[Bot Browser] Loaded full Chub lorebook data:', fullCard.name, 'entries:', Object.keys(lorebookData.entries || {}).length);
+                console.log('[CleanBotBrowser] Loaded full Chub lorebook data:', fullCard.name, 'entries:', Object.keys(lorebookData.entries || {}).length);
                 return fullCard;
             } else {
-                console.log('[Bot Browser] Lorebook data unavailable (private/deleted)');
+                console.log('[CleanBotBrowser] Lorebook data unavailable (private/deleted)');
             }
         } catch (error) {
-            console.error('[Bot Browser] Failed to load full Chub lorebook:', error);
+            console.error('[CleanBotBrowser] Failed to load full Chub lorebook:', error);
             // Fall through to return original card data
         }
     }
     else if (looksLikeChubCard && chubFullPath && !card.isLorebook) {
         try {
-            console.log('[Bot Browser] Fetching full Chub character data for:', chubFullPath);
+            console.log('[CleanBotBrowser] Fetching full Chub character data for:', chubFullPath);
             const charData = await getChubCharacter(chubFullPath);
             const fullData = transformFullChubCharacter(charData);
             const node = charData.node || charData;
@@ -155,10 +154,10 @@ async function loadFullCard(card) {
                 forksCount: node.forks_count || 0,
                 chubNodeId: node.id || null,
             };
-            console.log('[Bot Browser] Loaded full Chub character data:', fullCard.name);
+            console.log('[CleanBotBrowser] Loaded full Chub character data:', fullCard.name);
             return fullCard;
         } catch (error) {
-            console.error('[Bot Browser] Failed to load full Chub character:', error);
+            console.error('[CleanBotBrowser] Failed to load full Chub character:', error);
             // Fall through to return original card data
         }
     }
@@ -169,14 +168,14 @@ async function loadFullCard(card) {
 
     if (looksLikeJannyCard && card.id && card.slug) {
         try {
-            console.log('[Bot Browser] Fetching full JannyAI character data for:', card.id);
+            console.log('[CleanBotBrowser] Fetching full JannyAI character data for:', card.id);
             const jannyData = await fetchJannyCharacterDetails(card.id, card.slug);
             const fullData = transformFullJannyCharacter(jannyData);
             fullCard = { ...card, ...fullData, isJannyAI: true };
-            console.log('[Bot Browser] Loaded full JannyAI character data:', fullCard.name);
+            console.log('[CleanBotBrowser] Loaded full JannyAI character data:', fullCard.name);
             return fullCard;
         } catch (error) {
-            console.error('[Bot Browser] Failed to load full JannyAI character:', error);
+            console.error('[CleanBotBrowser] Failed to load full JannyAI character:', error);
             // Fall through to return original card data
         }
     }
@@ -188,14 +187,14 @@ async function loadFullCard(card) {
 
     if (looksLikeRisuRealmCard && card.id && card.isLiveApi) {
         try {
-            console.log('[Bot Browser] Fetching full RisuRealm character data for:', card.id);
+            console.log('[CleanBotBrowser] Fetching full RisuRealm character data for:', card.id);
             const risuData = await fetchRisuRealmCharacter(card.id);
             const fullData = transformFullRisuRealmCharacter(risuData);
             fullCard = { ...card, ...fullData, isRisuRealm: true };
-            console.log('[Bot Browser] Loaded full RisuRealm character data:', fullCard.name);
+            console.log('[CleanBotBrowser] Loaded full RisuRealm character data:', fullCard.name);
             return fullCard;
         } catch (error) {
-            console.error('[Bot Browser] Failed to load full RisuRealm character:', error);
+            console.error('[CleanBotBrowser] Failed to load full RisuRealm character:', error);
             // Fall through to return original card data
         }
     }
@@ -208,7 +207,7 @@ async function loadFullCard(card) {
 
     if (looksLikeBackyardCard && card.id && card.isLiveApi) {
         try {
-            console.log('[Bot Browser] Fetching full Backyard.ai character data for:', card.id);
+            console.log('[CleanBotBrowser] Fetching full Backyard.ai character data for:', card.id);
             const backyardData = await getBackyardCharacter(card.id);
             const fullData = transformFullBackyardCharacter(backyardData);
             // Preserve original card data if full data is empty
@@ -222,10 +221,10 @@ async function loadFullCard(card) {
                 description: fullData.description || card.description,
                 isBackyard: true
             };
-            console.log('[Bot Browser] Loaded full Backyard.ai character data:', fullCard.name);
+            console.log('[CleanBotBrowser] Loaded full Backyard.ai character data:', fullCard.name);
             return fullCard;
         } catch (error) {
-            console.error('[Bot Browser] Failed to load full Backyard.ai character:', error);
+            console.error('[CleanBotBrowser] Failed to load full Backyard.ai character:', error);
             // Fall through to return original card data
         }
     }
@@ -238,7 +237,7 @@ async function loadFullCard(card) {
 
     if (looksLikePygmalionCard && card.id && card.isLiveApi) {
         try {
-            console.log('[Bot Browser] Fetching full Pygmalion character data for:', card.id);
+            console.log('[CleanBotBrowser] Fetching full Pygmalion character data for:', card.id);
             const pygmalionData = await getPygmalionCharacter(card.id);
             const fullData = transformFullPygmalionCharacter(pygmalionData);
             // Preserve original card data if full data is empty
@@ -252,35 +251,11 @@ async function loadFullCard(card) {
                 description: fullData.description || card.description,
                 isPygmalion: true
             };
-            console.log('[Bot Browser] Loaded full Pygmalion character data:', fullCard.name);
+            console.log('[CleanBotBrowser] Loaded full Pygmalion character data:', fullCard.name);
             return fullCard;
         } catch (error) {
-            console.error('[Bot Browser] Failed to load full Pygmalion character:', error);
+            console.error('[CleanBotBrowser] Failed to load full Pygmalion character:', error);
             // Fall through to return original card data
-        }
-    }
-
-    // CharaVault live API cards - cards are downloadable PNGs, detail API provides metadata
-    const looksLikeCharaVaultCard = card.isCharaVault || card.service === 'charavault' || card.sourceService === 'charavault';
-    if (looksLikeCharaVaultCard && card.isLiveApi && (card._folder || card.folder) && (card._file || card.file)) {
-        const cvFolder = card._folder || card.folder;
-        const cvFile = card._file || card.file;
-        try {
-            const detail = await getCharavaultCard(cvFolder, cvFile);
-            fullCard = {
-                ...card,
-                description: detail.description || card.description || '',
-                first_mes: detail.first_mes || card.first_mes || '',
-                first_message: detail.first_mes || card.first_message || '',
-                mes_example: detail.mes_example || card.mes_example || '',
-                tags: detail.tags || card.tags || [],
-                _folder: cvFolder,
-                _file: cvFile,
-                isCharaVault: true
-            };
-            return fullCard;
-        } catch (error) {
-            console.error('[Bot Browser] Failed to load full CharaVault character:', error);
         }
     }
 
@@ -291,10 +266,10 @@ async function loadFullCard(card) {
             const charData = await getSakuraCharacter(card.id);
             const transformed = transformFullSakuraCharacter(charData);
             fullCard = { ...card, ...transformed, isSakura: true };
-            console.log('[Bot Browser] Loaded full Sakura.fm character:', fullCard.name);
+            console.log('[CleanBotBrowser] Loaded full Sakura.fm character:', fullCard.name);
             return fullCard;
         } catch (error) {
-            console.error('[Bot Browser] Failed to load full Sakura.fm character:', error);
+            console.error('[CleanBotBrowser] Failed to load full Sakura.fm character:', error);
         }
     }
 
@@ -305,10 +280,10 @@ async function loadFullCard(card) {
             const charData = await getSaucepanCompanion(card.id);
             const transformed = transformFullSaucepanCompanion(charData);
             fullCard = { ...card, ...transformed, isSaucepan: true };
-            console.log('[Bot Browser] Loaded full Saucepan.ai character:', fullCard.name);
+            console.log('[CleanBotBrowser] Loaded full Saucepan.ai character:', fullCard.name);
             return fullCard;
         } catch (error) {
-            console.error('[Bot Browser] Failed to load full Saucepan.ai character:', error);
+            console.error('[CleanBotBrowser] Failed to load full Saucepan.ai character:', error);
         }
     }
 
@@ -319,10 +294,10 @@ async function loadFullCard(card) {
             const charData = await getCrushonCharacter(card.id);
             const transformed = transformFullCrushonCharacter(charData);
             fullCard = { ...card, ...transformed, isCrushon: true };
-            console.log('[Bot Browser] Loaded full CrushOn.ai character:', fullCard.name);
+            console.log('[CleanBotBrowser] Loaded full CrushOn.ai character:', fullCard.name);
             return fullCard;
         } catch (error) {
-            console.error('[Bot Browser] Failed to load full CrushOn.ai character:', error);
+            console.error('[CleanBotBrowser] Failed to load full CrushOn.ai character:', error);
         }
     }
 
@@ -333,10 +308,10 @@ async function loadFullCard(card) {
             const charData = await getHarpyCharacter(card.id);
             const transformed = transformFullHarpyCharacter(charData);
             fullCard = { ...card, ...transformed, isHarpy: true };
-            console.log('[Bot Browser] Loaded full Harpy.chat character:', fullCard.name);
+            console.log('[CleanBotBrowser] Loaded full Harpy.chat character:', fullCard.name);
             return fullCard;
         } catch (error) {
-            console.error('[Bot Browser] Failed to load full Harpy.chat character:', error);
+            console.error('[CleanBotBrowser] Failed to load full Harpy.chat character:', error);
         }
     }
 
@@ -346,10 +321,10 @@ async function loadFullCard(card) {
             const botData = await getBotifyBot(card.id);
             const transformed = transformFullBotifyBot(botData);
             fullCard = { ...card, ...transformed, isBotify: true };
-            console.log('[Bot Browser] Loaded full Botify.ai bot:', fullCard.name);
+            console.log('[CleanBotBrowser] Loaded full Botify.ai bot:', fullCard.name);
             return fullCard;
         } catch (error) {
-            console.error('[Bot Browser] Failed to load full Botify.ai bot:', error);
+            console.error('[CleanBotBrowser] Failed to load full Botify.ai bot:', error);
         }
     }
 
@@ -374,11 +349,11 @@ async function loadFullCard(card) {
             if (npcData) {
                 const transformed = transformFullTalkieCharacter(npcData);
                 fullCard = { ...card, ...transformed, isTalkie: true };
-                console.log('[Bot Browser] Loaded full Talkie AI character:', fullCard.name);
+                console.log('[CleanBotBrowser] Loaded full Talkie AI character:', fullCard.name);
                 return fullCard;
             }
         } catch (error) {
-            console.error('[Bot Browser] Failed to load full Talkie AI character:', error);
+            console.error('[CleanBotBrowser] Failed to load full Talkie AI character:', error);
         }
         // Fall back to transform from browse data
         const transformed = transformFullTalkieCharacter(card);
@@ -639,7 +614,7 @@ function setupDetailModalEvents(detailModal, detailOverlay, fullCard, state) {
                 chubFavBtn.querySelector('span').textContent = nowFavorited ? 'Favorited' : 'Favorite';
                 toastr.success(nowFavorited ? 'Added to favorites' : 'Removed from favorites', '', { timeOut: 2000 });
             } catch (err) {
-                console.error('[Bot Browser] Toggle favorite failed:', err);
+                console.error('[CleanBotBrowser] Toggle favorite failed:', err);
                 toastr.error('Failed to update favorite');
             } finally {
                 chubFavBtn.disabled = false;
@@ -659,7 +634,7 @@ function setupDetailModalEvents(detailModal, detailOverlay, fullCard, state) {
                 favoriteCreatorBtn.querySelector('span').textContent = result.following ? 'Following' : 'Follow Creator';
                 toastr.success(result.following ? `Following ${fullCard.creator}` : `Unfollowed ${fullCard.creator}`, '', { timeOut: 2000 });
             } catch (error) {
-                console.error('[Bot Browser] Failed to toggle favorite creator:', error);
+                console.error('[CleanBotBrowser] Failed to toggle favorite creator:', error);
                 toastr.error('Could not update favorite creator');
             }
         });
@@ -681,7 +656,7 @@ function setupDetailModalEvents(detailModal, detailOverlay, fullCard, state) {
                 chubFollowBtn.querySelector('span').textContent = `${nowFollowing ? 'Following' : 'Follow'} @${username}`;
                 toastr.success(nowFollowing ? `Now following @${username}` : `Unfollowed @${username}`, '', { timeOut: 2000 });
             } catch (err) {
-                console.error('[Bot Browser] Toggle follow failed:', err);
+                console.error('[CleanBotBrowser] Toggle follow failed:', err);
                 toastr.error('Failed to update follow');
             } finally {
                 chubFollowBtn.disabled = false;
@@ -698,7 +673,7 @@ function setupDetailModalEvents(detailModal, detailOverlay, fullCard, state) {
         });
     });
 
-    // Open in SillyTavern button - opens chat with character and closes BotBrowser
+    // Open in SillyTavern button - opens chat with character and closes CleanBotBrowser
     const openInSTBtn = detailModal.querySelector('.bot-browser-open-in-st-btn');
     if (openInSTBtn) {
         openInSTBtn.addEventListener('click', async (e) => {
@@ -714,7 +689,7 @@ function setupDetailModalEvents(detailModal, detailOverlay, fullCard, state) {
                         menu.dialogObserver.disconnect();
                     }
 
-                    // Remove ALL BotBrowser elements to ensure nothing blocks clicks
+                    // Remove ALL CleanBotBrowser elements to ensure nothing blocks clicks
                     const elementsToRemove = [
                         'bot-browser-detail-modal',
                         'bot-browser-detail-overlay',
@@ -733,7 +708,7 @@ function setupDetailModalEvents(detailModal, detailOverlay, fullCard, state) {
                     // Also remove any elements by class that might be blocking
                     document.querySelectorAll('.bot-browser-detail-overlay, .bb-settings-backdrop').forEach(el => el.remove());
 
-                    // Reset body pointer events (BotBrowser sets this to 'none' when open)
+                    // Reset body pointer events (CleanBotBrowser sets this to 'none' when open)
                     document.body.style.pointerEvents = '';
 
                     // Reset the modal opening guard
@@ -741,9 +716,9 @@ function setupDetailModalEvents(detailModal, detailOverlay, fullCard, state) {
 
                     // Select the character in SillyTavern
                     await selectCharacterById(parseInt(characterIndex, 10));
-                    console.log('[Bot Browser] Opened chat with character:', fullCard.name);
+                    console.log('[CleanBotBrowser] Opened chat with character:', fullCard.name);
                 } catch (error) {
-                    console.error('[Bot Browser] Failed to open character:', error);
+                    console.error('[CleanBotBrowser] Failed to open character:', error);
                     toastr.error('Failed to open character chat', 'Error');
                     // Still reset pointer events on error
                     document.body.style.pointerEvents = '';
@@ -788,9 +763,9 @@ function setupDetailModalEvents(detailModal, detailOverlay, fullCard, state) {
 
                 document.getElementById('WorldInfo')?.click();
                 document.getElementById('world_info_button')?.click();
-                console.log('[Bot Browser] Opened World Info editor for:', lorebookName);
+                console.log('[CleanBotBrowser] Opened World Info editor for:', lorebookName);
             } catch (error) {
-                console.error('[Bot Browser] Failed to open World Info editor:', error);
+                console.error('[CleanBotBrowser] Failed to open World Info editor:', error);
                 toastr.error('Failed to open World Info editor', 'Error');
                 document.body.style.pointerEvents = '';
             }
@@ -873,7 +848,7 @@ function tryDetailImageWithProxy(imageDiv, originalUrl, proxyIndex = 0, checkedE
             if (!exists && (status === 404 || status === 410 || status === 403)) {
                 const message = status === 403 ? 'Image Restricted' : 'Image Removed';
                 showDetailImageError(imageDiv, message, originalUrl);
-                console.log(`[Bot Browser] Detail image ${status} (removed/restricted):`, originalUrl);
+                console.log(`[CleanBotBrowser] Detail image ${status} (removed/restricted):`, originalUrl);
                 return;
             }
             // Image exists or we can't tell, try proxies
@@ -904,9 +879,9 @@ function tryDetailImageWithProxy(imageDiv, originalUrl, proxyIndex = 0, checkedE
             imageDiv.dataset.objectUrl = objectUrl;
             imageDiv.style.backgroundImage = `url('${objectUrl}')`;
             imageDiv.setAttribute('data-image-url', objectUrl);
-            console.log(`[Bot Browser] Detail image loaded via ${proxyType}:`, originalUrl);
+            console.log(`[CleanBotBrowser] Detail image loaded via ${proxyType}:`, originalUrl);
         }).catch(() => {
-            console.log(`[Bot Browser] Detail image ${proxyType} failed for:`, originalUrl);
+            console.log(`[CleanBotBrowser] Detail image ${proxyType} failed for:`, originalUrl);
             tryDetailImageWithProxy(imageDiv, originalUrl, proxyIndex + 1, true);
         });
         return;
@@ -926,12 +901,12 @@ function tryDetailImageWithProxy(imageDiv, originalUrl, proxyIndex = 0, checkedE
         // Proxy worked! Update the image
         imageDiv.style.backgroundImage = `url('${proxyUrl}')`;
         imageDiv.setAttribute('data-image-url', proxyUrl);
-        console.log(`[Bot Browser] Detail image loaded via ${proxyType}:`, originalUrl);
+        console.log(`[CleanBotBrowser] Detail image loaded via ${proxyType}:`, originalUrl);
     };
 
     testImg.onerror = () => {
         // This proxy failed, try next
-        console.log(`[Bot Browser] Detail image ${proxyType} failed for:`, originalUrl);
+        console.log(`[CleanBotBrowser] Detail image ${proxyType} failed for:`, originalUrl);
         tryDetailImageWithProxy(imageDiv, originalUrl, proxyIndex + 1, true);
     };
 
@@ -961,7 +936,7 @@ function validateDetailModalImage(detailModal, card) {
 
     testImg.onerror = () => {
         // Image failed to load - try with CORS proxy
-        console.log('[Bot Browser] Detail image failed, trying proxies:', imageUrl);
+        console.log('[CleanBotBrowser] Detail image failed, trying proxies:', imageUrl);
         tryDetailImageWithProxy(imageDiv, imageUrl, 0);
     };
 
@@ -995,7 +970,7 @@ function showDetailImageError(imageDiv, errorCode, imageUrl) {
         </div>
     `;
 
-    console.log(`[Bot Browser] Detail modal image failed to load (${errorCode}):`, imageUrl);
+    console.log(`[CleanBotBrowser] Detail modal image failed to load (${errorCode}):`, imageUrl);
 }
 
 export function closeDetailModal() {
@@ -1008,7 +983,7 @@ export function closeDetailModal() {
     // Reset the modal opening guard
     isOpeningModal = false;
 
-    console.log('[Bot Browser] Card detail modal closed');
+    console.log('[CleanBotBrowser] Card detail modal closed');
 }
 
 export function showImageLightbox(imageUrl) {
@@ -1080,7 +1055,7 @@ export function showImageLightbox(imageUrl) {
             });
 
         img.replaceWith(errorDiv);
-        console.log('[Bot Browser] Image failed to load in lightbox:', imageUrl);
+        console.log('[CleanBotBrowser] Image failed to load in lightbox:', imageUrl);
     };
 
     const closeBtn = document.createElement('button');
@@ -1118,7 +1093,7 @@ export function showImageLightbox(imageUrl) {
         isClosing = true;
 
         lightbox.remove();
-        console.log('[Bot Browser] Image lightbox closed');
+        console.log('[CleanBotBrowser] Image lightbox closed');
     };
 
     lightbox.addEventListener('click', (e) => {
@@ -1151,5 +1126,5 @@ export function showImageLightbox(imageUrl) {
     };
     document.addEventListener('keydown', handleKeyDown);
 
-    console.log('[Bot Browser] Image lightbox opened');
+    console.log('[CleanBotBrowser] Image lightbox opened');
 }

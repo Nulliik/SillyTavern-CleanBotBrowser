@@ -260,7 +260,7 @@ function extractSpicychatGreetings(char) {
 }
 
 function getSpicychatGuestUserId() {
-    if (typeof window === 'undefined') return 'botbrowser-guest';
+    if (typeof window === 'undefined') return 'CleanBotBrowser-guest';
 
     const existing = window.localStorage.getItem('guest_user_id') || window.localStorage.getItem('bb_spicychat_guest_user_id');
     if (existing) return existing;
@@ -300,7 +300,7 @@ export async function getSpicychatCharacter(id) {
 }
 
 /**
- * Transform SpicyChat character to BotBrowser card format
+ * Transform SpicyChat character to CleanBotBrowser card format
  */
 export function transformSpicychatCard(char) {
     const avatarThumb = buildSpicychatAvatarUrl(char.avatar_url, 'avatar256x256');

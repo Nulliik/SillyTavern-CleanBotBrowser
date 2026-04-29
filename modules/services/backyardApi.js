@@ -183,9 +183,9 @@ export async function getBackyardUserProfile(username, options = {}) {
 }
 
 /**
- * Transform Backyard.ai character to BotBrowser card format
+ * Transform Backyard.ai character to CleanBotBrowser card format
  * @param {Object} char - Backyard.ai character object
- * @returns {Object} Card in BotBrowser format
+ * @returns {Object} Card in CleanBotBrowser format
  */
 export function transformBackyardCard(char) {
     // Get first character config (main character)

@@ -404,7 +404,7 @@ export async function hydrateJoylandSummaries(characters = [], options = {}) {
 }
 
 /**
- * Transform Joyland bot to BotBrowser card format
+ * Transform Joyland bot to CleanBotBrowser card format
  */
 export function transformJoylandCard(bot) {
     const tags = Array.isArray(bot.personality) ? bot.personality : [];

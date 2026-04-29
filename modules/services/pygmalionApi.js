@@ -322,9 +322,9 @@ export async function getPygmalionFollowedUsers() {
 }
 
 /**
- * Transform Pygmalion character to BotBrowser card format
+ * Transform Pygmalion character to CleanBotBrowser card format
  * @param {Object} char - Pygmalion character object from search
- * @returns {Object} Card in BotBrowser format
+ * @returns {Object} Card in CleanBotBrowser format
  */
 export function transformPygmalionCard(char) {
     const tags = char.tags || [];

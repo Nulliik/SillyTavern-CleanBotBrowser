@@ -293,7 +293,7 @@ export async function getTalkieCharacter(npcId) {
 }
 
 /**
- * Transform Talkie NPC to BotBrowser card format
+ * Transform Talkie NPC to CleanBotBrowser card format
  */
 export function transformTalkieCard(npc) {
     const stat = npc.statistic_info || {};

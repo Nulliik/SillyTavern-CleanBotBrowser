@@ -39,10 +39,10 @@ function normalizeBaseUrl(value) {
     }
 }
 
-function getStoredBotBrowserSettings() {
+function getStoredCleanBotBrowserSettings() {
     try {
         if (typeof window === 'undefined' || !window.localStorage) return null;
-        const raw = window.localStorage.getItem('botbrowser-settings');
+        const raw = window.localStorage.getItem('CleanBotBrowser-settings');
         return raw ? JSON.parse(raw) : null;
     } catch {
         return null;
@@ -59,7 +59,7 @@ export function getCharacterArchiveConfiguredBaseUrl() {
         // ignore
     }
 
-    const settings = getStoredBotBrowserSettings();
+    const settings = getStoredCleanBotBrowserSettings();
     return normalizeBaseUrl(settings?.characterArchiveUrl);
 }
 

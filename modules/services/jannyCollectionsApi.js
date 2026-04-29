@@ -18,7 +18,7 @@ export async function fetchJannyCollections(options = {}) {
     const nocache = Date.now();
     const url = `${JANNY_COLLECTIONS_URL}?sort=${sort}&page=${page}&nocache=${nocache}`;
 
-    console.log('[Bot Browser] Fetching JannyAI collections:', url);
+    console.log('[CleanBotBrowser] Fetching JannyAI collections:', url);
 
     const response = await proxiedFetch(url, {
         service: 'jannyai',
@@ -146,7 +146,7 @@ function parseCollectionsPage(html, currentPage, sort) {
 
     const orderedCollections = sortCollections(collections, sort);
 
-    console.log(`[Bot Browser] Parsed ${orderedCollections.length} collections from page ${currentPage}`);
+    console.log(`[CleanBotBrowser] Parsed ${orderedCollections.length} collections from page ${currentPage}`);
 
     return {
         collections: orderedCollections,
@@ -234,7 +234,7 @@ function findCollectionSection(html, fullPath) {
 export async function fetchJannyCollectionDetails(collectionId, slug) {
     const url = `https://jannyai.com/collections/${collectionId}_${slug}`;
 
-    console.log('[Bot Browser] Fetching JannyAI collection details:', url);
+    console.log('[CleanBotBrowser] Fetching JannyAI collection details:', url);
 
     const response = await proxiedFetch(url, {
         service: 'jannyai',
@@ -366,7 +366,7 @@ function parseCollectionDetailsPage(html, collectionId, slug) {
         });
     }
 
-    console.log(`[Bot Browser] Parsed ${characters.length} characters from collection`);
+    console.log(`[CleanBotBrowser] Parsed ${characters.length} characters from collection`);
 
     return {
         id: collectionId,

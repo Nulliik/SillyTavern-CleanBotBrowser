@@ -405,7 +405,7 @@ export async function getSaucepanCompanion(id) {
         return mergeSaucepanDefinition(baseCompanion, definitionPayload);
     } catch (error) {
         const normalizedError = normalizeSaucepanDefinitionError(error);
-        console.warn('[Bot Browser] Saucepan definition hydration failed:', normalizedError.message);
+        console.warn('[CleanBotBrowser] Saucepan definition hydration failed:', normalizedError.message);
         return {
             ...baseCompanion,
             definition_auth_error: normalizedError.message,
@@ -721,7 +721,7 @@ export async function getSaucepanLorebook(id) {
 }
 
 /**
- * Transform browse card to BotBrowser format
+ * Transform browse card to CleanBotBrowser format
  */
 export function transformSaucepanCard(card) {
     const tags = Array.isArray(card.tags) ? card.tags : [];
@@ -794,7 +794,7 @@ export function transformSaucepanCard(card) {
 }
 
 /**
- * Transform lorebook browse card to BotBrowser format
+ * Transform lorebook browse card to CleanBotBrowser format
  */
 export function transformSaucepanLorebook(lorebook) {
     const tags = Array.isArray(lorebook.tags) ? lorebook.tags : [];
@@ -1032,7 +1032,7 @@ export function transformFullSaucepanCompanion(companion) {
         companion.open_definition === true ? 'Definition visibility: public' : '',
         companion.open_definition === false && firstMes ? 'Closed-definition companion still exposes starting-scenario opener text through the authenticated companion payload.' : '',
         companion.definition_hydrated ? 'Definition endpoint hydrated with an authenticated Saucepan token.' : '',
-        companion.definition_requires_auth ? 'Open Definition exists on Saucepan, but greeting/example/system prompt fields require a Saucepan token in Bot Browser settings.' : '',
+        companion.definition_requires_auth ? 'Open Definition exists on Saucepan, but greeting/example/system prompt fields require a Saucepan token in CleanBotBrowser settings.' : '',
         companion.definition_auth_error ? `Definition hydration note: ${companion.definition_auth_error}` : '',
         scenarios.length > 0 ? `Public starting scenarios: ${scenarios.length}` : '',
         scenarioTitles.length > 0 ? `Scenario titles: ${scenarioTitles.join(', ')}` : '',
@@ -1130,7 +1130,7 @@ export function transformFullSaucepanLorebook(lorebook) {
         lorebook?.companion_count !== undefined ? `Attached companions: ${Number(lorebook.companion_count).toLocaleString()}` : '',
         lorebook?.definition_protection ? `Definition protection: ${lorebook.definition_protection}` : '',
         lorebook?.can_read ? `Readable: ${lorebook.can_read}` : '',
-        contentRequiresAuth && !authConnected ? 'Chapter text requires a Saucepan bearer token in Bot Browser settings.' : '',
+        contentRequiresAuth && !authConnected ? 'Chapter text requires a Saucepan bearer token in CleanBotBrowser settings.' : '',
         contentRequiresAuth && authConnected ? 'Saucepan still returned metadata only for this lorebook. The configured token may be expired, invalid, or missing access.' : '',
         lorebook?.access_level ? `Access level: ${lorebook.access_level}` : '',
         lorebook?.collaboration_type ? `Collaboration: ${lorebook.collaboration_type}` : '',

@@ -1,4 +1,4 @@
-﻿import { extension_settings } from '/scripts/extensions.js';
+import { extension_settings } from '/scripts/extensions.js';
 import { eventSource, event_types, saveSettingsDebounced, getRequestHeaders, getCharacters, selectCharacterById, characters } from '/script.js';
 import { importWorldInfo, updateWorldInfoList } from '/scripts/world-info.js';
 
@@ -45,9 +45,6 @@ import {
 import { fetchWyvernCreatorCards, searchWyvernCharacters, transformWyvernCard } from './modules/services/wyvernApi.js';
 import { searchCharacterTavern } from './modules/services/characterTavernApi.js';
 import {
-    searchCharavaultCards, transformCharavaultCard, charavaultApiState, resetCharavaultState
-} from './modules/services/charavaultApi.js';
-import {
     searchSakuraCharacters, transformSakuraCard, sakuraApiState, resetSakuraState,
     getSakuraCreatorCharacters
 } from './modules/services/sakuraApi.js';
@@ -80,15 +77,16 @@ import {
 } from './modules/services/talkieApi.js';
 import {
     authState, isLoggedIn, initAuthFromSettings,
-    fetchCharaVaultFavorites, fetchSakuraFavorites, fetchCrushonLikes
+    fetchSakuraFavorites, fetchCrushonLikes
 } from './modules/services/authManager.js';
 import { loadFavoriteCreatorsFeed, checkFavoriteCreatorUpdates } from './modules/services/favoriteCreators.js';
 
 // Extension version (from manifest.json)
-const EXTENSION_VERSION = '2.0.5';
+const EXTENSION_VERSION = '1.0';
 
 // Extension name and settings
-const extensionName = 'BotBrowser';
+const extensionName = 'CleanBotBrowser';
+const legacyExtensionName = 'BotBrowser';
 
 // State management
 const state = {
@@ -203,7 +201,7 @@ function getDefaultRandomServiceSettings() {
 // Default settings
 const defaultSettings = {
     enabled: true,
-    message: 'Bot Browser Active!',
+    message: 'CleanBotBrowser Active!',
     recentlyViewedEnabled: true,
     maxRecentlyViewed: 10,
     persistentSearchEnabled: true,
@@ -236,6 +234,11 @@ let importStats = {
 
 // Initialize settings
 function loadSettings() {
+    if (!extension_settings[extensionName] && extension_settings[legacyExtensionName]) {
+        extension_settings[extensionName] = { ...extension_settings[legacyExtensionName] };
+        saveSettingsDebounced();
+    }
+
     if (!extension_settings[extensionName]) {
         extension_settings[extensionName] = {};
     }
@@ -254,8 +257,6 @@ function loadSettings() {
         'harpyToken',
         'harpyUserId',
         'harpyDisplayName',
-        'charavaultCookie',
-        'charavaultDisplayName',
         'sakuraToken',
         'sakuraDisplayName',
         'crushonCookie',
@@ -370,8 +371,8 @@ async function showCardDetailWrapper(card, save = true, isRandom = false) {
             e.preventDefault();
             const creator = creatorLink.dataset.creator;
             const card = state.selectedCard;
-            console.log('[Bot Browser] Creator clicked:', creator);
-            console.log('[Bot Browser] Card service flags:', {
+            console.log('[CleanBotBrowser] Creator clicked:', creator);
+            console.log('[CleanBotBrowser] Card service flags:', {
                 service: card?.service,
                 sourceService: card?.sourceService,
                 isJannyAI: card?.isJannyAI,
@@ -416,7 +417,7 @@ async function showCardDetailWrapper(card, save = true, isRandom = false) {
                     }
                     return;
                 } catch (error) {
-                    console.error('[Bot Browser] Failed to load Chub creator cards:', error);
+                    console.error('[CleanBotBrowser] Failed to load Chub creator cards:', error);
                     state.isCreatorPage = false;
                     // Fall through to local filter
                 }
@@ -437,7 +438,7 @@ async function showCardDetailWrapper(card, save = true, isRandom = false) {
                     }
                     return;
                 } catch (error) {
-                    console.error('[Bot Browser] Failed to load Wyvern creator cards:', error);
+                    console.error('[CleanBotBrowser] Failed to load Wyvern creator cards:', error);
                     state.isCreatorPage = false;
                     // Fall through to local filter
                 }
@@ -462,27 +463,27 @@ async function showCardDetailWrapper(card, save = true, isRandom = false) {
                     }
                     return;
                 } catch (error) {
-                    console.error('[Bot Browser] Failed to load Character Tavern creator cards:', error);
+                    console.error('[CleanBotBrowser] Failed to load Character Tavern creator cards:', error);
                     state.isCreatorPage = false;
                     // Fall through to local filter
                 }
             }
 
             const isBackyard = card?.isBackyard || card?.service === 'backyard' || card?.sourceService?.includes('backyard');
-            console.log('[Bot Browser] Backyard creator check:', { isBackyard, creator, cardService: card?.service, cardSourceService: card?.sourceService });
+            console.log('[CleanBotBrowser] Backyard creator check:', { isBackyard, creator, cardService: card?.service, cardSourceService: card?.sourceService });
             if (isBackyard && creator) {
                 // Use Backyard user profile API to get all cards by creator
                 toastr.info(`Loading cards by ${escapeHTML(creator)}...`, '', { timeOut: 2000 });
 
                 try {
-                    console.log('[Bot Browser] Fetching Backyard user profile for:', creator);
+                    console.log('[CleanBotBrowser] Fetching Backyard user profile for:', creator);
                     const result = await getBackyardUserProfile(creator, {
                         sortBy: BACKYARD_SORT_TYPES.POPULAR
                     });
-                    console.log('[Bot Browser] Backyard user profile result:', result);
+                    console.log('[CleanBotBrowser] Backyard user profile result:', result);
 
                     const cards = result.characters.map(transformBackyardCard);
-                    console.log('[Bot Browser] Transformed Backyard cards:', cards.length);
+                    console.log('[CleanBotBrowser] Transformed Backyard cards:', cards.length);
 
                     if (cards.length > 0) {
                         state.isCreatorPage = true;
@@ -494,7 +495,7 @@ async function showCardDetailWrapper(card, save = true, isRandom = false) {
                     }
                     return;
                 } catch (error) {
-                    console.error('[Bot Browser] Failed to load Backyard creator cards:', error);
+                    console.error('[CleanBotBrowser] Failed to load Backyard creator cards:', error);
                     toastr.error(`Failed to load cards by ${escapeHTML(creator)}: ${error.message}`);
                     state.isCreatorPage = false;
                     // Fall through to local filter
@@ -503,18 +504,18 @@ async function showCardDetailWrapper(card, save = true, isRandom = false) {
 
             const isPygmalion = card?.isPygmalion || card?.service === 'pygmalion' || card?.sourceService?.includes('pygmalion');
             const creatorId = card?.creatorId || card?._rawData?.owner?.id;
-            console.log('[Bot Browser] Pygmalion creator check:', { isPygmalion, creator, creatorId, cardService: card?.service, cardSourceService: card?.sourceService });
+            console.log('[CleanBotBrowser] Pygmalion creator check:', { isPygmalion, creator, creatorId, cardService: card?.service, cardSourceService: card?.sourceService });
             if (isPygmalion && creatorId) {
                 // Use Pygmalion CharactersByOwnerID API to get all cards by creator
                 toastr.info(`Loading cards by ${escapeHTML(creator)}...`, '', { timeOut: 2000 });
 
                 try {
-                    console.log('[Bot Browser] Fetching Pygmalion characters for owner:', creatorId);
+                    console.log('[CleanBotBrowser] Fetching Pygmalion characters for owner:', creatorId);
                     const result = await getPygmalionCharactersByOwner(creatorId);
-                    console.log('[Bot Browser] Pygmalion owner result:', result);
+                    console.log('[CleanBotBrowser] Pygmalion owner result:', result);
 
                     const cards = result.characters.map(transformPygmalionCard);
-                    console.log('[Bot Browser] Transformed Pygmalion cards:', cards.length);
+                    console.log('[CleanBotBrowser] Transformed Pygmalion cards:', cards.length);
 
                     if (cards.length > 0) {
                         state.isCreatorPage = true;
@@ -526,7 +527,7 @@ async function showCardDetailWrapper(card, save = true, isRandom = false) {
                     }
                     return;
                 } catch (error) {
-                    console.error('[Bot Browser] Failed to load Pygmalion creator cards:', error);
+                    console.error('[CleanBotBrowser] Failed to load Pygmalion creator cards:', error);
                     toastr.error(`Failed to load cards by ${escapeHTML(creator)}: ${error.message}`);
                     state.isCreatorPage = false;
                     // Fall through to local filter
@@ -550,7 +551,7 @@ async function showCardDetailWrapper(card, save = true, isRandom = false) {
                     }
                     return;
                 } catch (error) {
-                    console.error('[Bot Browser] Failed to load Saucepan creator cards:', error);
+                    console.error('[CleanBotBrowser] Failed to load Saucepan creator cards:', error);
                     state.isCreatorPage = false;
                 }
             }
@@ -575,7 +576,7 @@ async function showCardDetailWrapper(card, save = true, isRandom = false) {
             e.stopPropagation();
             e.preventDefault();
             const tag = tagBtn.dataset.tag;
-            console.log('[Bot Browser] Filtering by tag:', tag);
+            console.log('[CleanBotBrowser] Filtering by tag:', tag);
 
             closeDetailModal();
 
@@ -638,7 +639,7 @@ function navigateBackToCollections() {
         sort: collectionsState.sort
     }, menu);
 
-    console.log('[Bot Browser] Navigated back to collections browser');
+    console.log('[CleanBotBrowser] Navigated back to collections browser');
 }
 
 // Navigate back to sources view
@@ -723,7 +724,7 @@ async function navigateToSources() {
     // Apply blur setting
     applyBlurSetting();
 
-    console.log('[Bot Browser] Navigated back to sources, tab:', state.lastActiveTab);
+    console.log('[CleanBotBrowser] Navigated back to sources, tab:', state.lastActiveTab);
 }
 
 // Setup tab switching
@@ -791,7 +792,7 @@ function populateBookmarksTab(menu) {
             const card = bookmarks.find(c => c.id === cardId);
 
             if (card) {
-                console.log('[Bot Browser] Opening bookmarked card:', card.name);
+                console.log('[CleanBotBrowser] Opening bookmarked card:', card.name);
                 await showCardDetailWrapper(card);
             }
         });
@@ -831,10 +832,10 @@ function setupRecentlyViewedCards(menu) {
             const card = state.recentlyViewed.find(c => c.id === cardId);
 
             if (card) {
-                console.log('[Bot Browser] Opening recently viewed card:', card.name);
+                console.log('[CleanBotBrowser] Opening recently viewed card:', card.name);
                 await showCardDetailWrapper(card);
             } else {
-                console.error('[Bot Browser] Recently viewed card not found:', cardId);
+                console.error('[CleanBotBrowser] Recently viewed card not found:', cardId);
                 toastr.error('Card not found in recently viewed');
             }
         });
@@ -884,7 +885,7 @@ function createCollectionsBrowser(collectionsData, menu) {
     // Setup event listeners
     setupCollectionsBrowserEvents(menuContent, menu);
 
-    console.log('[Bot Browser] Collections browser created');
+    console.log('[CleanBotBrowser] Collections browser created');
 }
 
 // Render collections page
@@ -918,7 +919,7 @@ function renderCollectionsPage(menuContent) {
             const collectionId = cardEl.dataset.collectionId;
             const collectionSlug = cardEl.dataset.collectionSlug;
 
-            console.log('[Bot Browser] Opening collection:', collectionId, collectionSlug);
+            console.log('[CleanBotBrowser] Opening collection:', collectionId, collectionSlug);
 
             try {
                 toastr.info('Loading collection...', '', { timeOut: 2000 });
@@ -947,7 +948,7 @@ function renderCollectionsPage(menuContent) {
 
                 await createCardBrowser(`${collectionDetails.name}`, cards, state, extensionName, extension_settings, showCardDetailWrapper);
             } catch (error) {
-                console.error('[Bot Browser] Error loading collection:', error);
+                console.error('[CleanBotBrowser] Error loading collection:', error);
                 toastr.error('Failed to load collection: ' + error.message);
             }
         });
@@ -977,7 +978,7 @@ function renderCollectionsPage(menuContent) {
 
                     renderCollectionsPage(menuContent);
                 } catch (error) {
-                    console.error('[Bot Browser] Error loading prev page:', error);
+                    console.error('[CleanBotBrowser] Error loading prev page:', error);
                     toastr.error('Failed to load page');
                     btn.disabled = false;
                     btn.innerHTML = '<i class="fa-solid fa-angle-left"></i> Prev';
@@ -998,7 +999,7 @@ function renderCollectionsPage(menuContent) {
 
                     renderCollectionsPage(menuContent);
                 } catch (error) {
-                    console.error('[Bot Browser] Error loading next page:', error);
+                    console.error('[CleanBotBrowser] Error loading next page:', error);
                     toastr.error('Failed to load page');
                     btn.disabled = false;
                     btn.innerHTML = 'Next <i class="fa-solid fa-angle-right"></i>';
@@ -1030,7 +1031,7 @@ function setupCollectionsBrowserEvents(menuContent, menu) {
         closeButton.addEventListener('click', (e) => {
             e.stopPropagation();
             e.preventDefault();
-            closeBotBrowserMenu();
+            closeCleanBotBrowserMenu();
         });
     }
 
@@ -1091,7 +1092,7 @@ function setupCollectionsBrowserEvents(menuContent, menu) {
 
                     renderCollectionsPage(menuContent);
                 } catch (error) {
-                    console.error('[Bot Browser] Error changing sort:', error);
+                    console.error('[CleanBotBrowser] Error changing sort:', error);
                     toastr.error('Failed to reload: ' + error.message);
                 }
             });
@@ -1115,7 +1116,7 @@ let trendingState = {
 
 // Load trending source
 async function loadTrendingSource(sourceName, menu) {
-    console.log(`[Bot Browser] Loading trending source: ${sourceName}`);
+    console.log(`[CleanBotBrowser] Loading trending source: ${sourceName}`);
     toastr.info('Loading trending...', '', { timeOut: 2000 });
 
     try {
@@ -1202,7 +1203,7 @@ async function loadTrendingSource(sourceName, menu) {
         trendingState.cards = cards;
         trendingState.page = 1;
 
-        console.log(`[Bot Browser] Loaded ${cards.length} trending cards from ${sourceName}`);
+        console.log(`[CleanBotBrowser] Loaded ${cards.length} trending cards from ${sourceName}`);
 
         if (cards.length === 0) {
             toastr.info('No trending cards found');
@@ -1213,7 +1214,7 @@ async function loadTrendingSource(sourceName, menu) {
         await createCardBrowser(displayName, cards, state, extensionName, extension_settings, showCardDetailWrapper);
 
     } catch (error) {
-        console.error('[Bot Browser] Error loading trending:', error);
+        console.error('[CleanBotBrowser] Error loading trending:', error);
         toastr.error(`Failed to load trending`);
     }
 }
@@ -1233,7 +1234,7 @@ function setupSourceButtons(menu) {
                 state.lastActiveTab = parentTab.dataset.content || 'bots';
             }
 
-            console.log(`[Bot Browser] Loading source: ${sourceName} (from tab: ${state.lastActiveTab})`);
+            console.log(`[CleanBotBrowser] Loading source: ${sourceName} (from tab: ${state.lastActiveTab})`);
 
             // Auto-clear filters when switching sources (if enabled)
             if (extension_settings[extensionName].autoClearFilters !== false) {
@@ -1290,7 +1291,7 @@ function setupSourceButtons(menu) {
                                 sourceService: service
                             }))
                         ).catch(err => {
-                            console.warn(`[Bot Browser] Failed to load ${service}:`, err);
+                            console.warn(`[CleanBotBrowser] Failed to load ${service}:`, err);
                             return [];
                         });
                     });
@@ -1314,7 +1315,7 @@ function setupSourceButtons(menu) {
                                     isLiveChub: true
                                 }));
                             }).catch(err => {
-                                console.warn('[Bot Browser] Failed to load Chub live API:', err);
+                                console.warn('[CleanBotBrowser] Failed to load Chub live API:', err);
                                 return [];
                             })
                         );
@@ -1334,7 +1335,7 @@ function setupSourceButtons(menu) {
                                     isLiveApi: true
                                 }))
                             ).catch(err => {
-                                console.warn('[Bot Browser] Failed to load RisuRealm live API:', err);
+                                console.warn('[CleanBotBrowser] Failed to load RisuRealm live API:', err);
                                 return [];
                             })
                         );
@@ -1353,7 +1354,7 @@ function setupSourceButtons(menu) {
                                 isLiveApi: true
                             }))
                         ).catch(err => {
-                            console.warn('[Bot Browser] Failed to load Pygmalion live API:', err);
+                            console.warn('[CleanBotBrowser] Failed to load Pygmalion live API:', err);
                             return [];
                         })
                     );
@@ -1370,7 +1371,7 @@ function setupSourceButtons(menu) {
                                 isLiveApi: true
                             }))
                         ).catch(err => {
-                            console.warn('[Bot Browser] Failed to load Backyard.ai live API:', err);
+                            console.warn('[CleanBotBrowser] Failed to load Backyard.ai live API:', err);
                             return [];
                         })
                     );
@@ -1388,7 +1389,7 @@ function setupSourceButtons(menu) {
                                     isLiveApi: true
                                 }))
                             ).catch(err => {
-                                console.warn('[Bot Browser] Failed to load Character Tavern live API:', err);
+                                console.warn('[CleanBotBrowser] Failed to load Character Tavern live API:', err);
                                 return [];
                             })
                         );
@@ -1407,7 +1408,7 @@ function setupSourceButtons(menu) {
                                         }))
                                     )
                             ).catch(err => {
-                                console.warn('[Bot Browser] Failed to load Wyvern live API:', err);
+                                console.warn('[CleanBotBrowser] Failed to load Wyvern live API:', err);
                                 return [];
                             })
                         );
@@ -1425,7 +1426,7 @@ function setupSourceButtons(menu) {
                                     }))
                                 )
                             ).catch(err => {
-                                console.warn('[Bot Browser] Failed to load MLPchag live API:', err);
+                                console.warn('[CleanBotBrowser] Failed to load MLPchag live API:', err);
                                 return [];
                             })
                         );
@@ -1446,7 +1447,7 @@ function setupSourceButtons(menu) {
                     // JannyAI is always excluded (blocked by anti-bot)
                     toastr.info('JanitorAI excluded (blocked by anti-bot protection)', '', { timeOut: 3000 });
 
-                    console.log(`[Bot Browser] Loaded ${cards.length} cards from all sources (${staticServices.length} archives + ${liveApiPromises.length} live APIs)`);
+                    console.log(`[CleanBotBrowser] Loaded ${cards.length} cards from all sources (${staticServices.length} archives + ${liveApiPromises.length} live APIs)`);
                 } else if (sourceName === 'chub_favorites') {
                     if (!isChubLoggedIn()) {
                         toastr.error('Chub API token required. Go to Settings → API to add your token.', 'Not Logged In', { timeOut: 4000 });
@@ -1458,7 +1459,7 @@ function setupSourceButtons(menu) {
                     cards = result.nodes.map(transformChubCard);
                     cards.forEach(c => { c._isFavorited = true; });
 
-                    console.log(`[Bot Browser] Loaded ${cards.length} Chub favorite cards`);
+                    console.log(`[CleanBotBrowser] Loaded ${cards.length} Chub favorite cards`);
                 } else if (sourceName === 'chub_timeline') {
                     if (!isChubLoggedIn()) {
                         toastr.error('Chub API token required. Go to Settings → API to add your token.', 'Not Logged In', { timeOut: 4000 });
@@ -1472,7 +1473,7 @@ function setupSourceButtons(menu) {
                     chubTimelineState.cursor = result.cursor;
                     chubTimelineState.hasMore = result.hasMore;
 
-                    console.log(`[Bot Browser] Loaded ${cards.length} timeline cards`);
+                    console.log(`[CleanBotBrowser] Loaded ${cards.length} timeline cards`);
                 } else if (sourceName === 'my_imports') {
                     // Load imported cards from local storage
                     toastr.info('Loading your imports...', '', { timeOut: 2000 });
@@ -1481,10 +1482,10 @@ function setupSourceButtons(menu) {
                     cards = await loadLocalLibrary();
 
                     if (cards.length === 0) {
-                        toastr.info('No imports yet. Import characters using Bot Browser to see them here!', 'My Imports', { timeOut: 4000 });
+                        toastr.info('No imports yet. Import characters using CleanBotBrowser to see them here!', 'My Imports', { timeOut: 4000 });
                     }
 
-                    console.log(`[Bot Browser] Loaded ${cards.length} imported cards`);
+                    console.log(`[CleanBotBrowser] Loaded ${cards.length} imported cards`);
                 } else if (sourceName === 'my_characters') {
                     toastr.info('Loading your local characters...', '', { timeOut: 2000 });
 
@@ -1495,7 +1496,7 @@ function setupSourceButtons(menu) {
                         toastr.info('No local characters found.', 'My Characters', { timeOut: 4000 });
                     }
 
-                    console.log(`[Bot Browser] Loaded ${cards.length} local characters`);
+                    console.log(`[CleanBotBrowser] Loaded ${cards.length} local characters`);
                 } else if (sourceName === 'my_lorebooks') {
                     toastr.info('Loading your local lorebooks...', '', { timeOut: 2000 });
 
@@ -1506,7 +1507,7 @@ function setupSourceButtons(menu) {
                         toastr.info('No local World Info files found.', 'Your Lorebooks', { timeOut: 4000 });
                     }
 
-                    console.log(`[Bot Browser] Loaded ${cards.length} local lorebooks`);
+                    console.log(`[CleanBotBrowser] Loaded ${cards.length} local lorebooks`);
                 } else if (sourceName === 'favorite_creators') {
                     toastr.info('Loading favorite creators...', '', { timeOut: 2000 });
 
@@ -1523,7 +1524,7 @@ function setupSourceButtons(menu) {
                         toastr.info('No cards found from followed creators right now.', 'Favorite Creators', { timeOut: 4000 });
                     }
 
-                    console.log(`[Bot Browser] Loaded ${cards.length} cards from ${favorites.length} favorite creators`);
+                    console.log(`[CleanBotBrowser] Loaded ${cards.length} cards from ${favorites.length} favorite creators`);
                 } else if (sourceName === 'jannyai') {
                     // JannyAI uses its own live API
                     toastr.info('Loading JannyAI...', '', { timeOut: 2000 });
@@ -1553,7 +1554,7 @@ function setupSourceButtons(menu) {
                     const results = searchResults.results?.[0] || {};
                     cards = (results.hits || []).map(hit => transformJannyCard(hit));
 
-                    console.log(`[Bot Browser] Loaded ${cards.length} JannyAI cards`);
+                    console.log(`[CleanBotBrowser] Loaded ${cards.length} JannyAI cards`);
                 } else if (sourceName === 'jannyai_collections') {
                     // JannyAI Collections - browse user-created collections
                     toastr.info('Loading JannyAI Collections...', '', { timeOut: 2000 });
@@ -1563,7 +1564,7 @@ function setupSourceButtons(menu) {
                         sort: 'popular'
                     });
 
-                    console.log(`[Bot Browser] Loaded ${collectionsData.collections.length} JannyAI collections`);
+                    console.log(`[CleanBotBrowser] Loaded ${collectionsData.collections.length} JannyAI collections`);
 
                     // Create collections browser instead of card browser
                     createCollectionsBrowser(collectionsData, menu);
@@ -1602,9 +1603,9 @@ function setupSourceButtons(menu) {
                             });
 
                             cards = result.cards.map(transformRisuRealmCard);
-                            console.log(`[Bot Browser] Loaded ${cards.length} RisuRealm cards (live API)`);
+                            console.log(`[CleanBotBrowser] Loaded ${cards.length} RisuRealm cards (live API)`);
                         } catch (error) {
-                            console.warn('[Bot Browser] RisuRealm live API failed, falling back to archive:', error.message);
+                            console.warn('[CleanBotBrowser] RisuRealm live API failed, falling back to archive:', error.message);
                             toastr.warning('Live API failed, loading archive...', '', { timeOut: 2000 });
                             cards = await loadServiceIndex(sourceName, false);
                         }
@@ -1645,7 +1646,7 @@ function setupSourceButtons(menu) {
                     backyardApiState.lastSort = backyardSort;
                     backyardApiState.lastType = extension_settings[extensionName].hideNsfw ? 'sfw' : 'all';
 
-                    console.log(`[Bot Browser] Loaded ${cards.length} Backyard.ai cards, hasMore: ${result.hasMore}`);
+                    console.log(`[CleanBotBrowser] Loaded ${cards.length} Backyard.ai cards, hasMore: ${result.hasMore}`);
                 } else if (sourceName === 'pygmalion') {
                     // Pygmalion uses its own live API
                     toastr.info('Loading Pygmalion...', '', { timeOut: 2000 });
@@ -1679,30 +1680,7 @@ function setupSourceButtons(menu) {
                     pygmalionApiState.lastSort = pygmalionSort;
                     pygmalionApiState.totalItems = result.totalItems;
 
-                    console.log(`[Bot Browser] Loaded ${cards.length} Pygmalion cards, hasMore: ${result.hasMore}, total: ${result.totalItems}`);
-                } else if (sourceName === 'charavault') {
-                    toastr.info('Loading CharaVault...', '', { timeOut: 2000 });
-                    resetCharavaultState();
-
-                    const persistedSearch = extension_settings[extensionName].autoClearFilters !== false ? null : loadPersistentSearch(extensionName, extension_settings, sourceName);
-                    const sortBy = persistedSearch?.sortBy || extension_settings[extensionName].defaultSortBy || 'relevance';
-                    const cvSort = sortBy === 'date_desc' ? 'newest' : sortBy === 'tokens_desc' ? 'top_rated' : 'most_downloaded';
-
-                    const result = await searchCharavaultCards({
-                        search: persistedSearch?.filters?.search || '',
-                        sort: cvSort,
-                        offset: 0,
-                        limit: 24
-                    });
-
-                    cards = result.characters.map(transformCharavaultCard);
-                    charavaultApiState.offset = result.nextOffset;
-                    charavaultApiState.hasMore = result.hasMore;
-                    charavaultApiState.total = result.total;
-                    charavaultApiState.lastSearch = persistedSearch?.filters?.search || '';
-                    charavaultApiState.lastSort = cvSort;
-
-                    console.log(`[Bot Browser] Loaded ${cards.length} CharaVault cards (${result.total} total), hasMore: ${result.hasMore}`);
+                    console.log(`[CleanBotBrowser] Loaded ${cards.length} Pygmalion cards, hasMore: ${result.hasMore}, total: ${result.totalItems}`);
                 } else if (sourceName === 'sakura') {
                     toastr.info('Loading Sakura.fm...', '', { timeOut: 2000 });
                     resetSakuraState();
@@ -1726,7 +1704,7 @@ function setupSourceButtons(menu) {
                     sakuraApiState.lastSort = sakuraSort;
                     sakuraApiState.lastNsfw = !extension_settings[extensionName].hideNsfw;
 
-                    console.log(`[Bot Browser] Loaded ${cards.length} Sakura.fm cards, hasMore: ${result.hasMore}`);
+                    console.log(`[CleanBotBrowser] Loaded ${cards.length} Sakura.fm cards, hasMore: ${result.hasMore}`);
                 } else if (sourceName === 'saucepan') {
                     toastr.info('Loading Saucepan.ai...', '', { timeOut: 2000 });
                     resetSaucepanState();
@@ -1750,7 +1728,7 @@ function setupSourceButtons(menu) {
                     saucepanApiState.lastSearch = persistedSearch?.filters?.search || '';
                     saucepanApiState.lastSort = spSort;
 
-                    console.log(`[Bot Browser] Loaded ${cards.length} Saucepan.ai cards (${result.total} total), hasMore: ${result.hasMore}`);
+                    console.log(`[CleanBotBrowser] Loaded ${cards.length} Saucepan.ai cards (${result.total} total), hasMore: ${result.hasMore}`);
                 } else if (sourceName === 'crushon') {
                     toastr.info('Loading CrushOn.AI...', '', { timeOut: 2000 });
                     resetCrushonState();
@@ -1775,7 +1753,7 @@ function setupSourceButtons(menu) {
                     crushonApiState.lastNsfw = allowNsfw;
                     crushonApiState.lastSearch = search;
 
-                    console.log(`[Bot Browser] Loaded ${cards.length} CrushOn.AI cards, hasMore: ${result.hasMore}`);
+                    console.log(`[CleanBotBrowser] Loaded ${cards.length} CrushOn.AI cards, hasMore: ${result.hasMore}`);
                 } else if (sourceName === 'harpy') {
                     toastr.info('Loading Harpy.chat...', '', { timeOut: 2000 });
                     resetHarpyState();
@@ -1798,7 +1776,7 @@ function setupSourceButtons(menu) {
                     harpyApiState.lastSearch = persistedSearch?.filters?.search || '';
                     harpyApiState.lastSort = harpySort;
 
-                    console.log(`[Bot Browser] Loaded ${cards.length} Harpy.chat cards (${result.total} total), hasMore: ${result.hasMore}`);
+                    console.log(`[CleanBotBrowser] Loaded ${cards.length} Harpy.chat cards (${result.total} total), hasMore: ${result.hasMore}`);
                 } else if (sourceName === 'botify') {
                     toastr.info('Loading Botify.ai...', '', { timeOut: 2000 });
                     resetBotifyState();
@@ -1809,7 +1787,7 @@ function setupSourceButtons(menu) {
                     botifyApiState.hasMore = result.hasMore;
                     botifyApiState.total = result.total;
 
-                    console.log(`[Bot Browser] Loaded ${cards.length} Botify.ai cards (${result.total} total)`);
+                    console.log(`[CleanBotBrowser] Loaded ${cards.length} Botify.ai cards (${result.total} total)`);
                 } else if (sourceName === 'joyland') {
                     toastr.info('Loading Joyland.ai...', '', { timeOut: 2000 });
                     resetJoylandState();
@@ -1819,7 +1797,7 @@ function setupSourceButtons(menu) {
                     cards = result.characters.map(transformJoylandHomepageCard);
                     joylandApiState.hasMore = false;
 
-                    console.log(`[Bot Browser] Loaded ${cards.length} Joyland.ai cards (homepage)`);
+                    console.log(`[CleanBotBrowser] Loaded ${cards.length} Joyland.ai cards (homepage)`);
                 } else if (sourceName === 'spicychat') {
                     toastr.info('Loading SpicyChat.ai...', '', { timeOut: 2000 });
                     resetSpicychatState();
@@ -1831,7 +1809,7 @@ function setupSourceButtons(menu) {
                     spicychatApiState.hasMore = result.hasMore;
                     spicychatApiState.total = result.total;
 
-                    console.log(`[Bot Browser] Loaded ${cards.length} SpicyChat cards (${result.total} total)`);
+                    console.log(`[CleanBotBrowser] Loaded ${cards.length} SpicyChat cards (${result.total} total)`);
                 } else if (sourceName === 'talkie') {
                     const talkieToken = extension_settings[extensionName]?.talkieToken;
                     if (!talkieToken) {
@@ -1848,17 +1826,7 @@ function setupSourceButtons(menu) {
                     talkieApiState.cursor = result.cursor;
                     talkieApiState.hasMore = result.hasMore;
 
-                    console.log(`[Bot Browser] Loaded ${cards.length} Talkie AI cards`);
-                } else if (sourceName === 'charavault_favorites') {
-                    if (!isLoggedIn('charavault')) {
-                        toastr.warning('Add your CharaVault cookie in Settings → API to access favorites.', 'Not logged in');
-                        return;
-                    }
-                    toastr.info('Loading CharaVault Favorites...', '', { timeOut: 2000 });
-                    const favsData = await fetchCharaVaultFavorites({ limit: 100 });
-                    const favItems = favsData.results || favsData.favorites || (Array.isArray(favsData) ? favsData : []);
-                    cards = favItems.map(transformCharavaultCard);
-                    console.log(`[Bot Browser] Loaded ${cards.length} CharaVault favorites`);
+                    console.log(`[CleanBotBrowser] Loaded ${cards.length} Talkie AI cards`);
                 } else if (sourceName === 'sakura_favorites') {
                     if (!isLoggedIn('sakura')) {
                         toastr.warning('Add your Sakura.fm token in Settings → API to access favorites.', 'Not logged in');
@@ -1867,7 +1835,7 @@ function setupSourceButtons(menu) {
                     toastr.info('Loading Sakura Favorites...', '', { timeOut: 2000 });
                     const sakFavsData = await fetchSakuraFavorites(authState.sakura.token, { limit: 100 });
                     cards = (sakFavsData.characters || []).map(transformSakuraCard);
-                    console.log(`[Bot Browser] Loaded ${cards.length} Sakura favorites`);
+                    console.log(`[CleanBotBrowser] Loaded ${cards.length} Sakura favorites`);
                 } else if (sourceName === 'crushon_favorites') {
                     if (!isLoggedIn('crushon')) {
                         toastr.warning('Add your CrushOn cookie in Settings → API to access your likes.', 'Not logged in');
@@ -1876,7 +1844,7 @@ function setupSourceButtons(menu) {
                     toastr.info('Loading CrushOn Likes...', '', { timeOut: 2000 });
                     const crushLikes = await fetchCrushonLikes({ limit: 100, offset: 0 });
                     cards = (Array.isArray(crushLikes) ? crushLikes : []).map(transformCrushonCard);
-                    console.log(`[Bot Browser] Loaded ${cards.length} CrushOn liked characters`);
+                    console.log(`[CleanBotBrowser] Loaded ${cards.length} CrushOn liked characters`);
                 } else {
                     toastr.info(`Loading ${sourceName}...`, '', { timeOut: 2000 });
 
@@ -1919,7 +1887,7 @@ function setupSourceButtons(menu) {
 
                 await createCardBrowser(sourceName, cards, state, extensionName, extension_settings, showCardDetailWrapper);
             } catch (error) {
-                console.error('[Bot Browser] Error loading source:', error);
+                console.error('[CleanBotBrowser] Error loading source:', error);
                 toastr.error(`Failed to load ${sourceName}`);
             }
         });
@@ -1933,7 +1901,7 @@ function setupCloseButton(menu) {
         closeButton.addEventListener('click', (e) => {
             e.stopPropagation();
             e.preventDefault();
-            closeBotBrowserMenu();
+            closeCleanBotBrowserMenu();
         });
     }
 }
@@ -2013,7 +1981,7 @@ async function showFavoriteCreatorPings() {
     const favorites = loadFavoriteCreators();
     if (favorites.length === 0) return;
 
-    const lastCheckKey = 'botBrowser_favoriteCreatorsLastPingCheck';
+    const lastCheckKey = 'CleanBotBrowser_favoriteCreatorsLastPingCheck';
     const lastCheck = Date.parse(localStorage.getItem(lastCheckKey) || 0) || 0;
     if (Date.now() - lastCheck < 30 * 60 * 1000) return;
     localStorage.setItem(lastCheckKey, new Date().toISOString());
@@ -2032,7 +2000,7 @@ async function showFavoriteCreatorPings() {
             );
         }
     } catch (error) {
-        console.warn('[Bot Browser] Favorite creator ping check failed:', error);
+        console.warn('[CleanBotBrowser] Favorite creator ping check failed:', error);
     }
 }
 
@@ -2143,7 +2111,7 @@ async function loadRandomCardsForService(selectedService) {
 // Play service roulette - instant random selection (no animation)
 async function playServiceRoulette(menu, preferSameService = null) {
     if (isRandomCardLoading) {
-        console.log('[Bot Browser] Random card request already in progress, ignoring duplicate click');
+        console.log('[CleanBotBrowser] Random card request already in progress, ignoring duplicate click');
         return;
     }
 
@@ -2183,17 +2151,17 @@ async function playServiceRoulette(menu, preferSameService = null) {
                 }
 
                 emptyServices.push(selectedService);
-                console.warn(`[Bot Browser] Random source had no usable cards, rerolling: ${selectedService}`);
+                console.warn(`[CleanBotBrowser] Random source had no usable cards, rerolling: ${selectedService}`);
             } catch (error) {
                 emptyServices.push(selectedService);
-                console.warn(`[Bot Browser] Random source failed, rerolling: ${selectedService}`, error);
+                console.warn(`[CleanBotBrowser] Random source failed, rerolling: ${selectedService}`, error);
             }
         }
 
-        console.warn(`[Bot Browser] Random card exhausted ${emptyServices.length} source(s): ${emptyServices.join(', ')}`);
+        console.warn(`[CleanBotBrowser] Random card exhausted ${emptyServices.length} source(s): ${emptyServices.join(', ')}`);
         toastr.warning('No cards available from enabled random sources');
     } catch (error) {
-        console.error('[Bot Browser] Error loading random card:', error);
+        console.error('[CleanBotBrowser] Error loading random card:', error);
         toastr.error('Failed to load random card');
     } finally {
         isRandomCardLoading = false;
@@ -2221,7 +2189,7 @@ async function getRandomCardFromSameService() {
     }
 }
 
-function setBotBrowserFullscreen(menu, enabled) {
+function setCleanBotBrowserFullscreen(menu, enabled) {
     if (!menu) return;
     menu.classList.toggle('bot-browser-menu-fullscreen', enabled);
     menu.dataset.presentation = enabled ? 'fullscreen' : 'compact';
@@ -2231,15 +2199,15 @@ function setBotBrowserFullscreen(menu, enabled) {
 async function openStandaloneBrowser() {
     const existingMenu = document.getElementById('bot-browser-menu');
     if (existingMenu) {
-        setBotBrowserFullscreen(existingMenu, true);
+        setCleanBotBrowserFullscreen(existingMenu, true);
         return;
     }
 
-    createBotBrowserMenu({ fullscreen: true });
+    createCleanBotBrowserMenu({ fullscreen: true });
 }
 
 function setupStandaloneImportBridge() {
-    console.warn('[Bot Browser] Cross-window standalone import bridge is disabled in this cleaned build.');
+    console.warn('[CleanBotBrowser] Cross-window standalone import bridge is disabled in this cleaned build.');
 }
 // Show settings modal
 function showSettingsModal() {
@@ -2421,7 +2389,7 @@ function showSettingsModal() {
                                 <input type="checkbox" id="bb-setting-chub-live-api" ${settings.useChubLiveApi !== false ? 'checked' : ''}>
                                 <span>Use Live Chub API</span>
                             </label>
-                            <small>Latest public cards with advanced filters. Personal Chub actions require the local BotBrowser plugin or direct CORS support.</small>
+                            <small>Latest public cards with advanced filters. Personal Chub actions require the local CleanBotBrowser plugin or direct CORS support.</small>
                         </div>
 
                         <div class="bb-api-options">
@@ -2556,14 +2524,14 @@ function showSettingsModal() {
     document.getElementById('bb-clear-recent').addEventListener('click', () => {
         if (confirm('Clear all recently viewed cards?')) {
             state.recentlyViewed = [];
-            localStorage.removeItem('botBrowser_recentlyViewed');
+            localStorage.removeItem('CleanBotBrowser_recentlyViewed');
             toastr.success('Recently viewed cleared');
         }
     });
 
     document.getElementById('bb-clear-search').addEventListener('click', () => {
         if (confirm('Clear search history?')) {
-            localStorage.removeItem('botBrowser_lastSearch');
+            localStorage.removeItem('CleanBotBrowser_lastSearch');
             state.filters = { search: '', tags: [], creator: '' };
             state.sortBy = 'relevance';
             toastr.success('Search history cleared');
@@ -2624,14 +2592,14 @@ function showSettingsModal() {
         }
     });
 
-    console.log('[Bot Browser] Settings modal opened');
+    console.log('[CleanBotBrowser] Settings modal opened');
 }
 
 // Close settings modal
 function closeSettingsModal() {
     const backdrop = document.getElementById('bb-settings-backdrop');
     if (backdrop) backdrop.remove();
-    console.log('[Bot Browser] Settings modal closed');
+    console.log('[CleanBotBrowser] Settings modal closed');
 }
 
 // Show stats modal
@@ -2839,14 +2807,14 @@ function showStatsModal() {
         }
     });
 
-    console.log('[Bot Browser] Stats modal opened');
+    console.log('[CleanBotBrowser] Stats modal opened');
 }
 
-// Create and show the bot browser menu
-function createBotBrowserMenu(options = {}) {
+// Create and show the CleanBotBrowser menu
+function createCleanBotBrowserMenu(options = {}) {
     if ($('#bot-browser-menu').length > 0) {
         if (options.fullscreen) {
-            setBotBrowserFullscreen(document.getElementById('bot-browser-menu'), true);
+            setCleanBotBrowserFullscreen(document.getElementById('bot-browser-menu'), true);
         }
         return;
     }
@@ -2863,7 +2831,7 @@ function createBotBrowserMenu(options = {}) {
     const menu = document.createElement('div');
     menu.id = 'bot-browser-menu';
     menu.className = 'bot-browser-menu';
-    setBotBrowserFullscreen(menu, options.fullscreen === true);
+    setCleanBotBrowserFullscreen(menu, options.fullscreen === true);
     menu.style.setProperty('position', 'fixed', 'important');
     menu.style.setProperty('top', options.fullscreen === true ? '0' : '50vh', 'important');
     menu.style.setProperty('left', options.fullscreen === true ? '0' : '50vw', 'important');
@@ -2887,7 +2855,7 @@ function createBotBrowserMenu(options = {}) {
     document.body.appendChild(overlay);
     document.body.appendChild(menu);
 
-    overlay.addEventListener('click', closeBotBrowserMenu);
+    overlay.addEventListener('click', closeCleanBotBrowserMenu);
     menu.addEventListener('click', (e) => e.stopPropagation());
     menu.addEventListener('mousedown', (e) => e.stopPropagation());
     menu.addEventListener('mouseup', (e) => e.stopPropagation());
@@ -2943,11 +2911,11 @@ function createBotBrowserMenu(options = {}) {
     }
     showFavoriteCreatorPings();
 
-    console.log('[Bot Browser] Menu created and displayed');
+    console.log('[CleanBotBrowser] Menu created and displayed');
 }
 
-// Close bot browser menu
-function closeBotBrowserMenu() {
+// Close CleanBotBrowser menu
+function closeCleanBotBrowserMenu() {
     const menu = document.getElementById('bot-browser-menu');
     const overlay = document.getElementById('bot-browser-overlay');
 
@@ -2968,7 +2936,7 @@ function closeBotBrowserMenu() {
         menu.remove();
         overlay.remove();
         document.body.style.pointerEvents = '';
-        console.log('[Bot Browser] Menu closed');
+        console.log('[CleanBotBrowser] Menu closed');
     }, 200);
 }
 
@@ -2983,11 +2951,11 @@ async function cache() {
 // Toggle bot menu
 function toggleBotMenu() {
     if ($('#bot-browser-menu').length > 0) {
-        closeBotBrowserMenu();
+        closeCleanBotBrowserMenu();
     } else {
         openStandaloneBrowser();
     }
-    console.log('[Bot Browser] Bot menu toggled');
+    console.log('[CleanBotBrowser] Bot menu toggled');
 }
 
 // Add bot button to character list panel
@@ -2999,8 +2967,8 @@ function addBotButton() {
     const botButton = $('<div>', {
         id: 'rm_button_bot',
         class: 'menu_button fa-solid fa-robot',
-        title: 'Bot Browser',
-        'data-i18n': '[title]Bot Browser'
+        title: 'CleanBotBrowser',
+        'data-i18n': '[title]CleanBotBrowser'
     });
 
     botButton.on('click', function(event) {
@@ -3012,12 +2980,12 @@ function addBotButton() {
 
     $('#rm_button_group_chats').after(botButton);
 
-    console.log('[Bot Browser] Bot button added to character list panel');
+    console.log('[CleanBotBrowser] Bot button added to character list panel');
 }
 
 // Listen for navigation events from browser.js
 window.addEventListener('bot-browser-navigate-sources', navigateToSources);
-window.addEventListener('bot-browser-close', closeBotBrowserMenu);
+window.addEventListener('bot-browser-close', closeCleanBotBrowserMenu);
 
 // Listen for bulk import event
 window.addEventListener('bot-browser-bulk-import', async (e) => {
@@ -3048,7 +3016,7 @@ window.addEventListener('bot-browser-bulk-import', async (e) => {
 
             successCount++;
         } catch (error) {
-            console.error(`[Bot Browser] Failed to import ${card.name}:`, error);
+            console.error(`[CleanBotBrowser] Failed to import ${card.name}:`, error);
             failCount++;
         }
 
@@ -3079,7 +3047,7 @@ window.addEventListener('bot-browser-bulk-import', async (e) => {
 
 // Initialize extension
 jQuery(async () => {
-    console.log('[Bot Browser] Extension loading...');
+    console.log('[CleanBotBrowser] Extension loading...');
 
     // CORS proxy support is lazy-loaded by corsProxy.js when needed
 
@@ -3091,11 +3059,11 @@ jQuery(async () => {
 
     addBotButton();
 
-    console.log('[Bot Browser] Extension loaded successfully!');
+    console.log('[CleanBotBrowser] Extension loaded successfully!');
 
     eventSource.on(event_types.CHAT_CHANGED, () => {
         if (extension_settings[extensionName].enabled) {
-            console.log('[Bot Browser] Chat changed!');
+            console.log('[CleanBotBrowser] Chat changed!');
         }
     });
 });

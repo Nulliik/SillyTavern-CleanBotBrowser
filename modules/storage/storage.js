@@ -3,15 +3,15 @@ export function loadPersistentSearch(extensionName, extension_settings, serviceN
         return null;
     }
     try {
-        const key = `botBrowser_lastSearch_${serviceName}`;
+        const key = `CleanBotBrowser_lastSearch_${serviceName}`;
         const saved = localStorage.getItem(key);
         if (saved) {
             const data = JSON.parse(saved);
-            console.log(`[Bot Browser] Loaded persistent search for ${serviceName}:`, data.filters);
+            console.log(`[CleanBotBrowser] Loaded persistent search for ${serviceName}:`, data.filters);
             return data;
         }
     } catch (error) {
-        console.error('[Bot Browser] Error loading persistent search:', error);
+        console.error('[CleanBotBrowser] Error loading persistent search:', error);
     }
     return null;
 }
@@ -30,24 +30,24 @@ export function savePersistentSearch(extensionName, extension_settings, serviceN
             ctAdvancedFilters: ctAdvancedFilters,
             wyvernAdvancedFilters: wyvernAdvancedFilters
         };
-        const key = `botBrowser_lastSearch_${serviceName}`;
+        const key = `CleanBotBrowser_lastSearch_${serviceName}`;
         localStorage.setItem(key, JSON.stringify(data));
     } catch (error) {
-        console.error('[Bot Browser] Error saving persistent search:', error);
+        console.error('[CleanBotBrowser] Error saving persistent search:', error);
     }
 }
 
 // Load search collapsed state from localStorage
 export function loadSearchCollapsed() {
     try {
-        const saved = localStorage.getItem('botBrowser_searchCollapsed');
+        const saved = localStorage.getItem('CleanBotBrowser_searchCollapsed');
         if (saved !== null) {
             const collapsed = JSON.parse(saved);
-            console.log('[Bot Browser] Loaded search collapsed state:', collapsed);
+            console.log('[CleanBotBrowser] Loaded search collapsed state:', collapsed);
             return collapsed;
         }
     } catch (error) {
-        console.error('[Bot Browser] Error loading search collapsed state:', error);
+        console.error('[CleanBotBrowser] Error loading search collapsed state:', error);
     }
     return false;
 }
@@ -55,9 +55,9 @@ export function loadSearchCollapsed() {
 // Save search collapsed state to localStorage
 export function saveSearchCollapsed(collapsed) {
     try {
-        localStorage.setItem('botBrowser_searchCollapsed', JSON.stringify(collapsed));
+        localStorage.setItem('CleanBotBrowser_searchCollapsed', JSON.stringify(collapsed));
     } catch (error) {
-        console.error('[Bot Browser] Error saving search collapsed state:', error);
+        console.error('[CleanBotBrowser] Error saving search collapsed state:', error);
     }
 }
 
@@ -67,7 +67,7 @@ export function loadRecentlyViewed(extensionName, extension_settings) {
         return [];
     }
     try {
-        const saved = localStorage.getItem('botBrowser_recentlyViewed');
+        const saved = localStorage.getItem('CleanBotBrowser_recentlyViewed');
         if (saved) {
             let recentlyViewed = JSON.parse(saved);
             // Trim to max setting
@@ -75,11 +75,11 @@ export function loadRecentlyViewed(extensionName, extension_settings) {
             if (recentlyViewed.length > maxRecent) {
                 recentlyViewed = recentlyViewed.slice(0, maxRecent);
             }
-            console.log('[Bot Browser] Loaded recently viewed:', recentlyViewed.length, 'cards');
+            console.log('[CleanBotBrowser] Loaded recently viewed:', recentlyViewed.length, 'cards');
             return recentlyViewed;
         }
     } catch (error) {
-        console.error('[Bot Browser] Error loading recently viewed:', error);
+        console.error('[CleanBotBrowser] Error loading recently viewed:', error);
     }
     return [];
 }
@@ -139,11 +139,11 @@ export function addToRecentlyViewed(extensionName, extension_settings, recentlyV
         }
 
         // Save to localStorage
-        localStorage.setItem('botBrowser_recentlyViewed', JSON.stringify(recentlyViewed));
+        localStorage.setItem('CleanBotBrowser_recentlyViewed', JSON.stringify(recentlyViewed));
 
         return recentlyViewed;
     } catch (error) {
-        console.error('[Bot Browser] Error adding to recently viewed:', error);
+        console.error('[CleanBotBrowser] Error adding to recently viewed:', error);
         return recentlyViewed;
     }
 }
@@ -151,14 +151,14 @@ export function addToRecentlyViewed(extensionName, extension_settings, recentlyV
 // Load import stats from localStorage
 export function loadImportStats() {
     try {
-        const saved = localStorage.getItem('botBrowser_importStats');
+        const saved = localStorage.getItem('CleanBotBrowser_importStats');
         if (saved) {
             const stats = JSON.parse(saved);
-            console.log('[Bot Browser] Loaded import stats:', stats.totalCharacters, 'characters,', stats.totalLorebooks, 'lorebooks');
+            console.log('[CleanBotBrowser] Loaded import stats:', stats.totalCharacters, 'characters,', stats.totalLorebooks, 'lorebooks');
             return stats;
         }
     } catch (error) {
-        console.error('[Bot Browser] Error loading import stats:', error);
+        console.error('[CleanBotBrowser] Error loading import stats:', error);
     }
     return {
         totalCharacters: 0,
@@ -172,23 +172,23 @@ export function loadImportStats() {
 // Save import stats to localStorage
 export function saveImportStats(importStats) {
     try {
-        localStorage.setItem('botBrowser_importStats', JSON.stringify(importStats));
+        localStorage.setItem('CleanBotBrowser_importStats', JSON.stringify(importStats));
     } catch (error) {
-        console.error('[Bot Browser] Error saving import stats:', error);
+        console.error('[CleanBotBrowser] Error saving import stats:', error);
     }
 }
 
 // Load bookmarks from localStorage
 export function loadBookmarks() {
     try {
-        const saved = localStorage.getItem('botBrowser_bookmarks');
+        const saved = localStorage.getItem('CleanBotBrowser_bookmarks');
         if (saved) {
             const bookmarks = JSON.parse(saved);
-            console.log('[Bot Browser] Loaded bookmarks:', bookmarks.length, 'cards');
+            console.log('[CleanBotBrowser] Loaded bookmarks:', bookmarks.length, 'cards');
             return bookmarks;
         }
     } catch (error) {
-        console.error('[Bot Browser] Error loading bookmarks:', error);
+        console.error('[CleanBotBrowser] Error loading bookmarks:', error);
     }
     return [];
 }
@@ -196,9 +196,9 @@ export function loadBookmarks() {
 // Save bookmarks to localStorage
 export function saveBookmarks(bookmarks) {
     try {
-        localStorage.setItem('botBrowser_bookmarks', JSON.stringify(bookmarks));
+        localStorage.setItem('CleanBotBrowser_bookmarks', JSON.stringify(bookmarks));
     } catch (error) {
-        console.error('[Bot Browser] Error saving bookmarks:', error);
+        console.error('[CleanBotBrowser] Error saving bookmarks:', error);
     }
 }
 
@@ -209,7 +209,7 @@ export function addBookmark(card) {
 
         // Check if already bookmarked
         if (bookmarks.some(b => b.id === card.id)) {
-            console.log('[Bot Browser] Card already bookmarked:', card.name);
+            console.log('[CleanBotBrowser] Card already bookmarked:', card.name);
             return bookmarks;
         }
 
@@ -237,10 +237,10 @@ export function addBookmark(card) {
         });
 
         saveBookmarks(bookmarks);
-        console.log('[Bot Browser] Added bookmark:', card.name);
+        console.log('[CleanBotBrowser] Added bookmark:', card.name);
         return bookmarks;
     } catch (error) {
-        console.error('[Bot Browser] Error adding bookmark:', error);
+        console.error('[CleanBotBrowser] Error adding bookmark:', error);
         return loadBookmarks();
     }
 }
@@ -254,11 +254,11 @@ export function removeBookmark(cardId) {
 
         if (bookmarks.length < before) {
             saveBookmarks(bookmarks);
-            console.log('[Bot Browser] Removed bookmark:', cardId);
+            console.log('[CleanBotBrowser] Removed bookmark:', cardId);
         }
         return bookmarks;
     } catch (error) {
-        console.error('[Bot Browser] Error removing bookmark:', error);
+        console.error('[CleanBotBrowser] Error removing bookmark:', error);
         return loadBookmarks();
     }
 }
@@ -269,7 +269,7 @@ export function isBookmarked(cardId) {
     return bookmarks.some(b => b.id === cardId);
 }
 
-const FAVORITE_CREATORS_KEY = 'botBrowser_favoriteCreators';
+const FAVORITE_CREATORS_KEY = 'CleanBotBrowser_favoriteCreators';
 
 function getCreatorKey(service, creator) {
     return `${String(service || 'unknown').trim().toLowerCase()}::${String(creator || '').trim().toLowerCase()}`;
@@ -280,7 +280,7 @@ export function loadFavoriteCreators() {
         const saved = localStorage.getItem(FAVORITE_CREATORS_KEY);
         return saved ? JSON.parse(saved) : [];
     } catch (error) {
-        console.error('[Bot Browser] Error loading favorite creators:', error);
+        console.error('[CleanBotBrowser] Error loading favorite creators:', error);
         return [];
     }
 }
@@ -289,7 +289,7 @@ export function saveFavoriteCreators(creators) {
     try {
         localStorage.setItem(FAVORITE_CREATORS_KEY, JSON.stringify(Array.isArray(creators) ? creators : []));
     } catch (error) {
-        console.error('[Bot Browser] Error saving favorite creators:', error);
+        console.error('[CleanBotBrowser] Error saving favorite creators:', error);
     }
 }
 
@@ -366,14 +366,14 @@ export function updateFavoriteCreator(key, patch) {
 // Load imported cards from localStorage (for "My Imports" browsing)
 export function loadImportedCards() {
     try {
-        const saved = localStorage.getItem('botBrowser_importedCards');
+        const saved = localStorage.getItem('CleanBotBrowser_importedCards');
         if (saved) {
             const cards = JSON.parse(saved);
-            console.log('[Bot Browser] Loaded imported cards:', cards.length, 'cards');
+            console.log('[CleanBotBrowser] Loaded imported cards:', cards.length, 'cards');
             return cards;
         }
     } catch (error) {
-        console.error('[Bot Browser] Error loading imported cards:', error);
+        console.error('[CleanBotBrowser] Error loading imported cards:', error);
     }
     return [];
 }
@@ -381,9 +381,9 @@ export function loadImportedCards() {
 // Save imported cards to localStorage
 export function saveImportedCards(cards) {
     try {
-        localStorage.setItem('botBrowser_importedCards', JSON.stringify(cards));
+        localStorage.setItem('CleanBotBrowser_importedCards', JSON.stringify(cards));
     } catch (error) {
-        console.error('[Bot Browser] Error saving imported cards:', error);
+        console.error('[CleanBotBrowser] Error saving imported cards:', error);
     }
 }
 
@@ -437,11 +437,11 @@ export function trackImportedCard(card, type = 'character') {
         }
 
         saveImportedCards(importedCards);
-        console.log('[Bot Browser] Tracked imported card:', card.name);
+        console.log('[CleanBotBrowser] Tracked imported card:', card.name);
 
         return importedCards;
     } catch (error) {
-        console.error('[Bot Browser] Error tracking imported card:', error);
+        console.error('[CleanBotBrowser] Error tracking imported card:', error);
         return loadImportedCards();
     }
 }
@@ -455,11 +455,11 @@ export function removeImportedCard(cardId) {
 
         if (importedCards.length < before) {
             saveImportedCards(importedCards);
-            console.log('[Bot Browser] Removed imported card:', cardId);
+            console.log('[CleanBotBrowser] Removed imported card:', cardId);
         }
         return importedCards;
     } catch (error) {
-        console.error('[Bot Browser] Error removing imported card:', error);
+        console.error('[CleanBotBrowser] Error removing imported card:', error);
         return loadImportedCards();
     }
 }
@@ -467,11 +467,11 @@ export function removeImportedCard(cardId) {
 // Clear all imported cards
 export function clearImportedCards() {
     try {
-        localStorage.removeItem('botBrowser_importedCards');
-        console.log('[Bot Browser] Cleared all imported cards');
+        localStorage.removeItem('CleanBotBrowser_importedCards');
+        console.log('[CleanBotBrowser] Cleared all imported cards');
         return [];
     } catch (error) {
-        console.error('[Bot Browser] Error clearing imported cards:', error);
+        console.error('[CleanBotBrowser] Error clearing imported cards:', error);
         return [];
     }
 }

@@ -137,7 +137,7 @@ function parseCharacterTavernLiteral(literal, fallback) {
     try {
         return JSON.parse(normalizeCharacterTavernLiteral(literal));
     } catch (error) {
-        console.warn('[Bot Browser] Character Tavern literal parse failed:', error);
+        console.warn('[CleanBotBrowser] Character Tavern literal parse failed:', error);
         return fallback;
     }
 }
@@ -436,7 +436,7 @@ export async function searchCharacterTavern(options = {}) {
         if (sort) params.set('sort', sort);
 
         const url = `${CT_API_BASE}?${params}`;
-        console.log('[Bot Browser] Character Tavern API request:', url);
+        console.log('[CleanBotBrowser] Character Tavern API request:', url);
 
         const response = await characterTavernFetch(url, {
             headers: {
@@ -457,7 +457,7 @@ export async function searchCharacterTavern(options = {}) {
         characterTavernApiState.totalHits = data.totalHits || 0;
         characterTavernApiState.lastSearch = query;
 
-        console.log('[Bot Browser] Character Tavern API response:', {
+        console.log('[CleanBotBrowser] Character Tavern API response:', {
             hits: data.hits?.length || 0,
             totalHits: data.totalHits,
             page: data.page,
@@ -466,7 +466,7 @@ export async function searchCharacterTavern(options = {}) {
 
         return (data.hits || []).map(transformCharacterTavernCard);
     } catch (error) {
-        console.error('[Bot Browser] Character Tavern API error:', error);
+        console.error('[CleanBotBrowser] Character Tavern API error:', error);
         throw error;
     } finally {
         characterTavernApiState.isLoading = false;
@@ -585,7 +585,7 @@ export async function getCharacterTavernAuthorProfile(username) {
             }
         }
     } catch (error) {
-        console.warn('[Bot Browser] Character Tavern author data fetch failed, falling back to HTML:', error);
+        console.warn('[CleanBotBrowser] Character Tavern author data fetch failed, falling back to HTML:', error);
     }
 
     const response = await characterTavernFetch(`${CT_SITE_BASE}/author/${encodeURIComponent(trimmedUsername)}`, {
@@ -736,7 +736,7 @@ export async function getCharacterTavernLibraryData(section = 'imported') {
 }
 
 /**
- * Transform a Character Tavern card to BotBrowser format
+ * Transform a Character Tavern card to CleanBotBrowser format
  * @param {Object} node - Raw card data from API
  * @returns {Object} Transformed card
  */
@@ -813,7 +813,7 @@ export function transformCharacterTavernCard(node) {
 
 /**
  * Transform Character Tavern card to SillyTavern import format
- * @param {Object} card - BotBrowser card format
+ * @param {Object} card - CleanBotBrowser card format
  * @returns {Object} SillyTavern character format
  */
 export function transformFullCharacterTavernCard(card) {

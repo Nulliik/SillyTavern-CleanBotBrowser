@@ -134,7 +134,7 @@ export async function getBotifyBot(id) {
 }
 
 /**
- * Transform Botify bot to BotBrowser card format
+ * Transform Botify bot to CleanBotBrowser card format
  */
 export function transformBotifyCard(bot) {
     const a = bot.attributes || {};

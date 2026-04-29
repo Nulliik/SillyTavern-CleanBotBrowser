@@ -1,4 +1,4 @@
-import { isBotBrowserPluginAvailable, proxiedFetch } from './corsProxy.js';
+import { isCleanBotBrowserPluginAvailable, proxiedFetch } from './corsProxy.js';
 
 const BOT3_BASE = 'https://bot3.ai';
 const JINA_PREFIX = 'https://r.jina.ai/http://';
@@ -726,7 +726,7 @@ async function fetchBot3Text(url, options = {}) {
         if (preferJina) {
             const jinaUrl = buildJinaUrl(url);
             const accept = 'text/plain,text/html,*/*;q=0.8';
-            const pluginReady = await isBotBrowserPluginAvailable().catch(() => false);
+            const pluginReady = await isCleanBotBrowserPluginAvailable().catch(() => false);
             const attempts = pluginReady
                 ? [
                     async () => {

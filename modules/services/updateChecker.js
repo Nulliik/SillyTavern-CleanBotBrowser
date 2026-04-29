@@ -47,7 +47,7 @@ export async function checkForUpdates(currentVersion) {
 }
 
 /**
- * Create and show the update banner in the Bot Browser menu
+ * Create and show the update banner in the CleanBotBrowser menu
  * @param {HTMLElement} container - Container to prepend the banner to
  * @param {string} currentVersion - Current version
  * @param {string} latestVersion - Latest available version
@@ -79,8 +79,8 @@ export function showUpdateBanner(container, currentVersion, latestVersion) {
 }
 
 /**
- * Initialize update checker - call this when Bot Browser menu opens
- * @param {HTMLElement} menuContainer - The Bot Browser menu container
+ * Initialize update checker - call this when CleanBotBrowser menu opens
+ * @param {HTMLElement} menuContainer - The CleanBotBrowser menu container
  * @param {string} currentVersion - Current extension version
  */
 export async function initUpdateChecker(menuContainer, currentVersion) {

@@ -1,4 +1,4 @@
-// Auth Manager for BotBrowser
+// Auth Manager for CleanBotBrowser
 // Cleaned browse-only build: account login, token refresh, and favorites are disabled.
 
 const AUTH_DISABLED_MESSAGE = 'Account login and authenticated account actions are disabled in this cleaned browse-only build.';
@@ -6,7 +6,6 @@ const AUTH_DISABLED_MESSAGE = 'Account login and authenticated account actions a
 export const authState = {
     saucepan: { token: null, userId: null, displayName: null },
     harpy: { token: null, userId: null, displayName: null },
-    charavault: { cookie: null, displayName: null },
     sakura: { token: null, userId: null, displayName: null },
     wyvern: { token: null, refreshToken: null, userId: null, displayName: null },
     pygmalion: { token: null, userId: null, displayName: null },
@@ -89,14 +88,6 @@ export async function loginWyvern() {
     throw disabledError('Wyvern login');
 }
 
-export async function loginCharaVault() {
-    throw disabledError('CharaVault login');
-}
-
-export async function verifyCharaVaultCookie() {
-    throw disabledError('CharaVault token verification');
-}
-
 export async function verifySakuraToken() {
     throw disabledError('Sakura token verification');
 }
@@ -105,20 +96,12 @@ export async function verifyCrushonCookie() {
     throw disabledError('CrushOn cookie verification');
 }
 
-export async function fetchCharaVaultFavorites() {
-    throw disabledError('CharaVault favorites');
-}
-
 export async function fetchSakuraFavorites() {
     throw disabledError('Sakura favorites');
 }
 
 export async function fetchCrushonLikes() {
     throw disabledError('CrushOn likes');
-}
-
-export async function toggleCharaVaultFavorite() {
-    throw disabledError('CharaVault favorite toggle');
 }
 
 export async function toggleSakuraFavorite() {

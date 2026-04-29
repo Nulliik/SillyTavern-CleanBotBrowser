@@ -6,10 +6,10 @@ const QUILLGEN_API_URL = 'https://quillgen.app/v1/public/api/browse';
  * Load characters from QuillGen API.
  * Without API key: returns public characters only.
  * With API key: returns public characters + user's own characters (marked with is_own).
- * @returns {Promise<Array>} Array of QuillGen cards in BotBrowser format
+ * @returns {Promise<Array>} Array of QuillGen cards in CleanBotBrowser format
  */
 export async function loadQuillgenIndex() {
-    const settings = extension_settings?.['BotBrowser'] || {};
+    const settings = extension_settings?.['CleanBotBrowser'] || {};
     const apiKey = settings.quillgenApiKey;
 
     try {
@@ -22,16 +22,16 @@ export async function loadQuillgenIndex() {
 
         if (response.status === 401) {
             if (apiKey) {
-                console.error('[Bot Browser] QuillGen API key is invalid');
+                console.error('[CleanBotBrowser] QuillGen API key is invalid');
                 toastr.error('QuillGen API key is invalid. Check your settings.', 'Authentication Failed');
             } else {
-                console.warn('[Bot Browser] QuillGen requires authentication for this request');
+                console.warn('[CleanBotBrowser] QuillGen requires authentication for this request');
             }
             return [];
         }
 
         if (!response.ok) {
-            console.error(`[Bot Browser] QuillGen API error: ${response.status}`);
+            console.error(`[CleanBotBrowser] QuillGen API error: ${response.status}`);
             toastr.error(`Failed to load QuillGen characters: ${response.statusText}`);
             return [];
         }
@@ -43,7 +43,7 @@ export async function loadQuillgenIndex() {
 
         const ownCount = mappedCards.filter(c => c.is_own).length;
         const publicCount = mappedCards.length - ownCount;
-        console.log(`[Bot Browser] Loaded ${mappedCards.length} cards from QuillGen (${publicCount} public, ${ownCount} own)`);
+        console.log(`[CleanBotBrowser] Loaded ${mappedCards.length} cards from QuillGen (${publicCount} public, ${ownCount} own)`);
 
         if (mappedCards.length === 0) {
             const msg = apiKey
@@ -54,7 +54,7 @@ export async function loadQuillgenIndex() {
 
         return mappedCards;
     } catch (error) {
-        console.error('[Bot Browser] Error loading QuillGen index:', error);
+        console.error('[CleanBotBrowser] Error loading QuillGen index:', error);
         toastr.error('Failed to connect to QuillGen');
         return [];
     }
@@ -66,13 +66,13 @@ export async function loadQuillgenIndex() {
  * @returns {Promise<Blob>} The card image blob
  */
 export async function fetchQuillgenCard(card) {
-    const settings = extension_settings?.['BotBrowser'] || {};
+    const settings = extension_settings?.['CleanBotBrowser'] || {};
     const apiKey = settings.quillgenApiKey;
 
     const cardUrl = card.image_url;
     // Log the URL without the key for security
     const logUrl = cardUrl.split('?')[0];
-    console.log('[Bot Browser] Fetching QuillGen card from:', logUrl);
+    console.log('[CleanBotBrowser] Fetching QuillGen card from:', logUrl);
 
     const fetchOptions = {};
     if (apiKey && apiKey.trim() !== '') {
@@ -83,31 +83,31 @@ export async function fetchQuillgenCard(card) {
         const response = await fetch(cardUrl, fetchOptions);
 
         if (response.status === 401) {
-            console.error('[Bot Browser] QuillGen authentication failed', response);
+            console.error('[CleanBotBrowser] QuillGen authentication failed', response);
             toastr.error('QuillGen API key is invalid. Check your settings.', 'Invalid API key');
             return null;
         }
 
         if (!response.ok) {
-            console.error(`[Bot Browser] Failed to fetch QuillGen card: ${response.status}`, response);
+            console.error(`[CleanBotBrowser] Failed to fetch QuillGen card: ${response.status}`, response);
             toastr.error(`Failed to fetch QuillGen card: ${response.statusText}`);
             return null;
         }
 
-        console.log('[Bot Browser] ✓ Successfully fetched QuillGen card');
+        console.log('[CleanBotBrowser] ✓ Successfully fetched QuillGen card');
         return await response.blob();
     } catch (err) {
-        console.error('[Bot Browser] Error fetching QuillGen card:', err);
+        console.error('[CleanBotBrowser] Error fetching QuillGen card:', err);
         toastr.error('Failed to fetch QuillGen card');
         return null;
     }
 }
 
 /**
- * Transform a QuillGen card to BotBrowser format
+ * Transform a QuillGen card to CleanBotBrowser format
  * @param {Object} card - Raw card from QuillGen API
  * @param {string} apiKey - Optional API key for authenticated URLs
- * @returns {Object} Card in BotBrowser format
+ * @returns {Object} Card in CleanBotBrowser format
  */
 function transformQuillgenCard(card, apiKey) {
     const appendApiKey = (url) => {

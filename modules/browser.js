@@ -20,7 +20,6 @@ import {
 import { searchChubCards, transformChubCard } from './services/chubApi.js';
 import { searchBackyardCharacters, transformBackyardCard, backyardApiState, resetBackyardApiState, loadMoreBackyardCharacters, BACKYARD_SORT_TYPES } from './services/backyardApi.js';
 import { pygmalionApiState, resetPygmalionApiState, loadMorePygmalionCharacters } from './services/pygmalionApi.js';
-import { searchCharavaultCards, transformCharavaultCard, charavaultApiState, resetCharavaultState } from './services/charavaultApi.js';
 import { searchSakuraCharacters, transformSakuraCard, sakuraApiState, resetSakuraState } from './services/sakuraApi.js';
 import { searchSaucepanCompanions, transformSaucepanCard, saucepanApiState, resetSaucepanState } from './services/saucepanApi.js';
 import { browseCrushonCharacters, searchCrushonCharacters, transformCrushonCard, crushonApiState, resetCrushonState } from './services/crushonApi.js';
@@ -107,7 +106,7 @@ async function loadCardsUntilTarget({ state, extensionName, extension_settings, 
                 break;
             }
         } catch (error) {
-            console.error('[Bot Browser] Failed to load more cards:', error);
+            console.error('[CleanBotBrowser] Failed to load more cards:', error);
             lastError = error;
             break;
         }
@@ -128,12 +127,12 @@ function applyClientSideFilters(cards, state, extensionName, extension_settings)
         const hasValidImage = imageUrl && imageUrl.trim().length > 0 && (imageUrl.startsWith('http://') || imageUrl.startsWith('https://'));
         const canRenderWithoutImage = card.isLorebook || card.isLocal || card.service === 'my_lorebooks' || card.sourceService === 'my_lorebooks';
         if (!hasValidImage && !canRenderWithoutImage) {
-            console.log(`[Bot Browser] No valid image: Hiding "${card.name}" - image URL: "${imageUrl || 'none'}"`);
+            console.log(`[CleanBotBrowser] No valid image: Hiding "${card.name}" - image URL: "${imageUrl || 'none'}"`);
         }
         return hasValidImage || canRenderWithoutImage;
     });
 
-    console.log(`[Bot Browser] applyClientSideFilters: ${cards.length} input -> ${filtered.length} after blocklist/NSFW -> ${cardsWithImages.length} after image filter`);
+    console.log(`[CleanBotBrowser] applyClientSideFilters: ${cards.length} input -> ${filtered.length} after blocklist/NSFW -> ${cardsWithImages.length} after image filter`);
 
     return cardsWithImages;
 }
@@ -170,9 +169,6 @@ export async function createCardBrowser(serviceName, cards, state, extensionName
     }
 
     // New live API services
-    state.isCharaVault = serviceName === 'charavault' || cards.some(c => c.isCharaVault || c.service === 'charavault');
-    if (state.isCharaVault && serviceName === 'charavault') resetCharavaultState();
-
     state.isSakura = serviceName === 'sakura' || cards.some(c => c.isSakura || c.service === 'sakura');
     if (state.isSakura && serviceName === 'sakura') resetSakuraState();
 
@@ -472,7 +468,7 @@ export async function createCardBrowser(serviceName, cards, state, extensionName
         });
     }
 
-    console.log('[Bot Browser] Card browser created with', sortedCards.length, 'cards');
+    console.log('[CleanBotBrowser] Card browser created with', sortedCards.length, 'cards');
 }
 
 // Update filter dropdowns
@@ -481,7 +477,7 @@ function updateFilterDropdowns(menuContent, allTags, allCreators, state) {
     const tagFilterContainer = menuContent.querySelector('#bot-browser-tag-filter');
 
     if (!tagFilterContainer) {
-        console.warn('[Bot Browser] Tag filter container not found');
+        console.warn('[CleanBotBrowser] Tag filter container not found');
         return;
     }
 
@@ -489,7 +485,7 @@ function updateFilterDropdowns(menuContent, allTags, allCreators, state) {
     const tagTriggerText = tagFilterContainer.querySelector('.selected-text');
 
     if (!tagOptionsContainer || !tagTriggerText) {
-        console.warn('[Bot Browser] Tag filter elements not found');
+        console.warn('[CleanBotBrowser] Tag filter elements not found');
         return;
     }
 
@@ -621,7 +617,7 @@ function setupBrowserEventListeners(menuContent, state, extensionName, extension
     closeButton.addEventListener('click', (e) => {
         e.stopPropagation();
         e.preventDefault();
-        // closeBotBrowserMenu will be called from main index.js
+        // closeCleanBotBrowserMenu will be called from main index.js
         window.dispatchEvent(new CustomEvent('bot-browser-close'));
     });
 
@@ -690,7 +686,7 @@ function setupBrowserEventListeners(menuContent, state, extensionName, extension
         if (state.isLiveChub) {
             const chubService = state.isLorebooks ? 'chub_lorebooks' : 'chub';
             const chubTypeLabel = state.isLorebooks ? 'lorebooks' : 'cards';
-            console.log(`[Bot Browser] Triggering Chub API ${chubTypeLabel} search:`, state.filters.search);
+            console.log(`[CleanBotBrowser] Triggering Chub API ${chubTypeLabel} search:`, state.filters.search);
             try {
                 // Reset and reload with new search
                 let cards = await loadServiceIndex(chubService, true, {
@@ -702,7 +698,7 @@ function setupBrowserEventListeners(menuContent, state, extensionName, extension
 
                 // If API returns no results and we have a search query, fallback to archive
                 if (cards.length === 0 && state.filters.search.trim()) {
-                    console.log('[Bot Browser] Chub API returned no results, searching archive...');
+                    console.log('[CleanBotBrowser] Chub API returned no results, searching archive...');
                     const archiveCards = await loadServiceIndex(chubService, false);
                     if (archiveCards.length > 0) {
                         const fuseKeys = state.isLorebooks
@@ -715,7 +711,7 @@ function setupBrowserEventListeners(menuContent, state, extensionName, extension
                         });
                         const archiveResults = archiveFuse.search(state.filters.search);
                         cards = archiveResults.map(r => ({ ...r.item, fromArchive: true }));
-                        console.log(`[Bot Browser] Found ${cards.length} results in Chub archive`);
+                        console.log(`[CleanBotBrowser] Found ${cards.length} results in Chub archive`);
                     }
                 }
 
@@ -735,11 +731,11 @@ function setupBrowserEventListeners(menuContent, state, extensionName, extension
 
                 renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
             } catch (error) {
-                console.error('[Bot Browser] Chub API search failed:', error);
+                console.error('[CleanBotBrowser] Chub API search failed:', error);
             }
         } else if (state.isJannyAI) {
             // For JannyAI, trigger fresh API search
-            console.log('[Bot Browser] Triggering JannyAI search:', state.filters.search);
+            console.log('[CleanBotBrowser] Triggering JannyAI search:', state.filters.search);
             try {
                 resetJannyApiState();
 
@@ -783,11 +779,11 @@ function setupBrowserEventListeners(menuContent, state, extensionName, extension
                 updateCachedFiltersAndDropdowns(state, menuContent);
                 renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
             } catch (error) {
-                console.error('[Bot Browser] JannyAI search failed:', error);
+                console.error('[CleanBotBrowser] JannyAI search failed:', error);
             }
         } else if (state.isCharacterTavern) {
             // For Character Tavern, trigger fresh API search
-            console.log('[Bot Browser] Triggering Character Tavern search:', state.filters.search);
+            console.log('[CleanBotBrowser] Triggering Character Tavern search:', state.filters.search);
             try {
                 resetCharacterTavernState();
 
@@ -804,7 +800,7 @@ function setupBrowserEventListeners(menuContent, state, extensionName, extension
 
                 // If API returns no results and we have a search query, fallback to archive
                 if (cards.length === 0 && state.filters.search.trim()) {
-                    console.log('[Bot Browser] CT API returned no results, searching archive...');
+                    console.log('[CleanBotBrowser] CT API returned no results, searching archive...');
                     const archiveCards = await loadServiceIndex('character_tavern', false);
                     if (archiveCards.length > 0) {
                         const archiveFuse = new Fuse(archiveCards, {
@@ -814,7 +810,7 @@ function setupBrowserEventListeners(menuContent, state, extensionName, extension
                         });
                         const archiveResults = archiveFuse.search(state.filters.search);
                         cards = archiveResults.map(r => ({ ...r.item, fromArchive: true }));
-                        console.log(`[Bot Browser] Found ${cards.length} results in CT archive`);
+                        console.log(`[CleanBotBrowser] Found ${cards.length} results in CT archive`);
                     }
                 }
 
@@ -832,11 +828,11 @@ function setupBrowserEventListeners(menuContent, state, extensionName, extension
                 updateCachedFiltersAndDropdowns(state, menuContent);
                 renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
             } catch (error) {
-                console.error('[Bot Browser] Character Tavern search failed:', error);
+                console.error('[CleanBotBrowser] Character Tavern search failed:', error);
             }
         } else if (state.isWyvern) {
             // For Wyvern, trigger fresh API search
-            console.log('[Bot Browser] Triggering Wyvern search:', state.filters.search);
+            console.log('[CleanBotBrowser] Triggering Wyvern search:', state.filters.search);
             try {
                 if (state.isWyvernLorebooks) {
                     resetWyvernLorebooksApiState();
@@ -884,11 +880,11 @@ function setupBrowserEventListeners(menuContent, state, extensionName, extension
                 updateCachedFiltersAndDropdowns(state, menuContent);
                 renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
             } catch (error) {
-                console.error('[Bot Browser] Wyvern search failed:', error);
+                console.error('[CleanBotBrowser] Wyvern search failed:', error);
             }
         } else if (state.isAllSources && state.filters.search.trim()) {
             // For All Sources with a search query, query live APIs in parallel with local search
-            console.log('[Bot Browser] All Sources search:', state.filters.search);
+            console.log('[CleanBotBrowser] All Sources search:', state.filters.search);
             try {
                 const useLiveChubApi = extension_settings[extensionName].useChubLiveApi !== false;
                 const useRisuRealmLiveApi = extension_settings[extensionName].useRisuRealmLiveApi !== false;
@@ -946,7 +942,7 @@ function setupBrowserEventListeners(menuContent, state, extensionName, extension
 
                 // Merge local and API results, deduplicate
                 const mergedCards = deduplicateCards([...allApiCards, ...localResults]);
-                console.log(`[Bot Browser] All Sources search: ${localResults.length} local + ${allApiCards.length} API = ${mergedCards.length} unique`);
+                console.log(`[CleanBotBrowser] All Sources search: ${localResults.length} local + ${allApiCards.length} API = ${mergedCards.length} unique`);
 
                 state.currentCards = mergedCards;
                 state.fuse = new Fuse(mergedCards, state.fuseOptions);
@@ -959,14 +955,14 @@ function setupBrowserEventListeners(menuContent, state, extensionName, extension
                 updateCachedFiltersAndDropdowns(state, menuContent);
                 renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
             } catch (error) {
-                console.error('[Bot Browser] All Sources search failed:', error);
+                console.error('[CleanBotBrowser] All Sources search failed:', error);
                 // Fall back to local search
                 refreshCardGrid(state, extensionName, extension_settings, showCardDetailFunc);
             }
         } else {
             // Lazy initialize Fuse.js when user starts searching
             if (state.filters.search && !state.fuse) {
-                console.log('[Bot Browser] Initializing Fuse.js search index...');
+                console.log('[CleanBotBrowser] Initializing Fuse.js search index...');
                 state.fuse = new Fuse(state.currentCards, state.fuseOptions);
             }
             refreshCardGrid(state, extensionName, extension_settings, showCardDetailFunc);
@@ -1086,7 +1082,7 @@ function setupBrowserEventListeners(menuContent, state, extensionName, extension
                     countContainer.textContent = `Browsing Chub API (${filteredCards.length} cards loaded)`;
                 }
             } catch (error) {
-                console.error('[Bot Browser] Failed to clear filters:', error);
+                console.error('[CleanBotBrowser] Failed to clear filters:', error);
                 toastr.error('Failed to clear filters: ' + error.message);
             } finally {
                 clearButton.disabled = false;
@@ -1155,7 +1151,7 @@ function setupAdvancedFilterListeners(menuContent, state, extensionName, extensi
             requireGreetings: menuContent.querySelector('.bot-browser-require-greetings').checked
         };
 
-        console.log('[Bot Browser] Applying advanced filters:', state.advancedFilters);
+        console.log('[CleanBotBrowser] Applying advanced filters:', state.advancedFilters);
 
         // Trigger new API search with all filters
         try {
@@ -1193,7 +1189,7 @@ function setupAdvancedFilterListeners(menuContent, state, extensionName, extensi
                 countContainer.textContent = `Browsing Chub API (${filteredCards.length} ${label} loaded)`;
             }
         } catch (error) {
-            console.error('[Bot Browser] Chub API advanced filter search failed:', error);
+            console.error('[CleanBotBrowser] Chub API advanced filter search failed:', error);
             toastr.error('Failed to apply filters: ' + error.message);
         } finally {
             applyBtn.disabled = false;
@@ -1236,7 +1232,7 @@ function setupJannyAdvancedFilterListeners(menuContent, state, extensionName, ex
             hideLowQuality: hideLowQuality
         };
 
-        console.log('[Bot Browser] Applying JannyAI advanced filters:', state.jannyAdvancedFilters);
+        console.log('[CleanBotBrowser] Applying JannyAI advanced filters:', state.jannyAdvancedFilters);
 
         // Trigger new API search with all filters
         try {
@@ -1289,7 +1285,7 @@ function setupJannyAdvancedFilterListeners(menuContent, state, extensionName, ex
                 countContainer.textContent = `Browsing JannyAI (${filteredCards.length} cards loaded)`;
             }
         } catch (error) {
-            console.error('[Bot Browser] JannyAI advanced filter search failed:', error);
+            console.error('[CleanBotBrowser] JannyAI advanced filter search failed:', error);
             toastr.error('Failed to apply filters: ' + error.message);
         } finally {
             applyBtn.disabled = false;
@@ -1333,7 +1329,7 @@ function setupCTAdvancedFilterListeners(menuContent, state, extensionName, exten
             isOC: menuContent.querySelector('.bot-browser-ct-is-oc').checked
         };
 
-        console.log('[Bot Browser] Applying Character Tavern advanced filters:', state.ctAdvancedFilters);
+        console.log('[CleanBotBrowser] Applying Character Tavern advanced filters:', state.ctAdvancedFilters);
 
         // Trigger new API search with all filters
         try {
@@ -1372,7 +1368,7 @@ function setupCTAdvancedFilterListeners(menuContent, state, extensionName, exten
                 countContainer.textContent = `Browsing Character Tavern (${filteredCards.length} cards loaded)`;
             }
         } catch (error) {
-            console.error('[Bot Browser] Character Tavern advanced filter search failed:', error);
+            console.error('[CleanBotBrowser] Character Tavern advanced filter search failed:', error);
             toastr.error('Failed to apply filters: ' + error.message);
         } finally {
             applyBtn.disabled = false;
@@ -1413,7 +1409,7 @@ function setupWyvernAdvancedFilterListeners(menuContent, state, extensionName, e
             tags: tags
         };
 
-        console.log('[Bot Browser] Applying Wyvern advanced filters:', state.wyvernAdvancedFilters);
+        console.log('[CleanBotBrowser] Applying Wyvern advanced filters:', state.wyvernAdvancedFilters);
 
         // Trigger new API search with all filters
         try {
@@ -1470,7 +1466,7 @@ function setupWyvernAdvancedFilterListeners(menuContent, state, extensionName, e
                 countContainer.textContent = `Browsing Wyvern Chat (${filteredCards.length} cards loaded)`;
             }
         } catch (error) {
-            console.error('[Bot Browser] Wyvern advanced filter search failed:', error);
+            console.error('[CleanBotBrowser] Wyvern advanced filter search failed:', error);
             toastr.error('Failed to apply filters: ' + error.message);
         } finally {
             applyBtn.disabled = false;
@@ -1637,7 +1633,7 @@ function setupCustomDropdown(container, state, filterType, extensionName, extens
 
             // For live Chub, trigger fresh API call with new sort
             if (state.isLiveChub) {
-                console.log('[Bot Browser] Triggering Chub API sort:', state.sortBy);
+                console.log('[CleanBotBrowser] Triggering Chub API sort:', state.sortBy);
                 (async () => {
                     try {
                         const chubService = state.isLorebooks ? 'chub_lorebooks' : 'chub';
@@ -1678,12 +1674,12 @@ function setupCustomDropdown(container, state, filterType, extensionName, extens
 
                         renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
                     } catch (error) {
-                        console.error('[Bot Browser] Chub API sort failed:', error);
+                        console.error('[CleanBotBrowser] Chub API sort failed:', error);
                     }
                 })();
             } else if (state.isJannyAI) {
                 // For JannyAI, trigger fresh API call with new sort
-                console.log('[Bot Browser] Triggering JannyAI sort:', state.sortBy);
+                console.log('[CleanBotBrowser] Triggering JannyAI sort:', state.sortBy);
                 (async () => {
                     try {
                         resetJannyApiState();
@@ -1728,12 +1724,12 @@ function setupCustomDropdown(container, state, filterType, extensionName, extens
                         updateCachedFiltersAndDropdowns(state, menuContent);
                         renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
                     } catch (error) {
-                        console.error('[Bot Browser] JannyAI sort failed:', error);
+                        console.error('[CleanBotBrowser] JannyAI sort failed:', error);
                     }
                 })();
             } else if (state.isCharacterTavern) {
                 // For Character Tavern, trigger fresh API call with new sort
-                console.log('[Bot Browser] Triggering Character Tavern sort:', state.sortBy);
+                console.log('[CleanBotBrowser] Triggering Character Tavern sort:', state.sortBy);
                 (async () => {
                     try {
                         resetCharacterTavernState();
@@ -1764,12 +1760,12 @@ function setupCustomDropdown(container, state, filterType, extensionName, extens
                         updateCachedFiltersAndDropdowns(state, menuContent);
                         renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
                     } catch (error) {
-                        console.error('[Bot Browser] Character Tavern sort failed:', error);
+                        console.error('[CleanBotBrowser] Character Tavern sort failed:', error);
                     }
                 })();
             } else if (state.isWyvern) {
                 // For Wyvern, trigger fresh API call with new sort
-                console.log('[Bot Browser] Triggering Wyvern sort:', state.sortBy);
+                console.log('[CleanBotBrowser] Triggering Wyvern sort:', state.sortBy);
                 (async () => {
                     try {
                         if (state.isWyvernLorebooks) {
@@ -1819,7 +1815,7 @@ function setupCustomDropdown(container, state, filterType, extensionName, extens
                         updateCachedFiltersAndDropdowns(state, menuContent);
                         renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
                     } catch (error) {
-                        console.error('[Bot Browser] Wyvern sort failed:', error);
+                        console.error('[CleanBotBrowser] Wyvern sort failed:', error);
                     }
                 })();
             } else {
@@ -1907,8 +1903,6 @@ function renderPage(state, menuContent, showCardDetailFunc, extensionName, exten
         paginationHTML = createChubPaginationHTML(pygmalionApiState.page, pygmalionApiState.hasMore, false);
     } else if (state.isRisuRealm) {
         paginationHTML = createChubPaginationHTML(risuRealmApiState.page, risuRealmApiState.hasMore, false);
-    } else if (state.isCharaVault) {
-        paginationHTML = createChubPaginationHTML(1, charavaultApiState.hasMore, false);
     } else if (state.isSakura) {
         paginationHTML = createChubPaginationHTML(1, sakuraApiState.hasMore, false);
     } else if (state.isSaucepan) {
@@ -1985,8 +1979,6 @@ function renderPage(state, menuContent, showCardDetailFunc, extensionName, exten
         setupPygmalionPaginationListeners(gridContainer, state, menuContent, showCardDetailFunc, extensionName, extension_settings);
     } else if (state.isRisuRealm) {
         setupRisuRealmPaginationListeners(gridContainer, state, menuContent, showCardDetailFunc, extensionName, extension_settings);
-    } else if (state.isCharaVault) {
-        setupCharaVaultPaginationListeners(gridContainer, state, menuContent, showCardDetailFunc, extensionName, extension_settings);
     } else if (state.isSakura) {
         setupSakuraPaginationListeners(gridContainer, state, menuContent, showCardDetailFunc, extensionName, extension_settings);
     } else if (state.isSaucepan) {
@@ -2015,13 +2007,13 @@ function renderPage(state, menuContent, showCardDetailFunc, extensionName, exten
     validateCardImages();
 
     if (state.isLiveChub) {
-        console.log(`[Bot Browser] Rendered Chub page ${state.currentPage} (${pageCards.length} cards)`);
+        console.log(`[CleanBotBrowser] Rendered Chub page ${state.currentPage} (${pageCards.length} cards)`);
     } else if (state.isJannyAI) {
-        console.log(`[Bot Browser] Rendered JannyAI API page ${jannyApiState.page} (${pageCards.length} cards)`);
+        console.log(`[CleanBotBrowser] Rendered JannyAI API page ${jannyApiState.page} (${pageCards.length} cards)`);
     } else if (state.isCharacterTavern) {
-        console.log(`[Bot Browser] Rendered Character Tavern API page ${ctApiState.page} (${pageCards.length} cards)`);
+        console.log(`[CleanBotBrowser] Rendered Character Tavern API page ${ctApiState.page} (${pageCards.length} cards)`);
     } else {
-        console.log(`[Bot Browser] Rendered page ${state.currentPage}/${state.totalPages}`);
+        console.log(`[CleanBotBrowser] Rendered page ${state.currentPage}/${state.totalPages}`);
     }
 }
 
@@ -2120,7 +2112,7 @@ function setupJannyPaginationListeners(gridContainer, state, menuContent, showCa
                 btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
 
                 try {
-                    console.log(`[Bot Browser] Fetching JannyAI API page ${pageNum}`);
+                    console.log(`[CleanBotBrowser] Fetching JannyAI API page ${pageNum}`);
 
                     const searchResults = await searchJannyCharacters({
                         search: jannyApiState.lastSearch,
@@ -2149,9 +2141,9 @@ function setupJannyPaginationListeners(gridContainer, state, menuContent, showCa
                     updateCachedFiltersAndDropdowns(state, menuContent);
                     renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
 
-                    console.log(`[Bot Browser] Displaying JannyAI API page ${pageNum} (${cards.length} cards)`);
+                    console.log(`[CleanBotBrowser] Displaying JannyAI API page ${pageNum} (${cards.length} cards)`);
                 } catch (error) {
-                    console.error('[Bot Browser] Failed to fetch JannyAI page:', error);
+                    console.error('[CleanBotBrowser] Failed to fetch JannyAI page:', error);
                     toastr.error('Failed to load page');
                 } finally {
                     btn.disabled = false;
@@ -2187,7 +2179,7 @@ function setupCTPaginationListeners(gridContainer, state, menuContent, showCardD
                 btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
 
                 try {
-                    console.log(`[Bot Browser] Fetching Character Tavern API page ${pageNum}`);
+                    console.log(`[CleanBotBrowser] Fetching Character Tavern API page ${pageNum}`);
 
                     const cards = await searchCharacterTavern({
                         query: state.filters.search,
@@ -2211,9 +2203,9 @@ function setupCTPaginationListeners(gridContainer, state, menuContent, showCardD
                     updateCachedFiltersAndDropdowns(state, menuContent);
                     renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
 
-                    console.log(`[Bot Browser] Displaying Character Tavern API page ${pageNum} (${cards.length} cards)`);
+                    console.log(`[CleanBotBrowser] Displaying Character Tavern API page ${pageNum} (${cards.length} cards)`);
                 } catch (error) {
-                    console.error('[Bot Browser] Failed to fetch Character Tavern page:', error);
+                    console.error('[CleanBotBrowser] Failed to fetch Character Tavern page:', error);
                     toastr.error('Failed to load page');
                 } finally {
                     btn.disabled = false;
@@ -2249,7 +2241,7 @@ function setupWyvernPaginationListeners(gridContainer, state, menuContent, showC
                 btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
 
                 try {
-                    console.log(`[Bot Browser] Fetching Wyvern API page ${pageNum}`);
+                    console.log(`[CleanBotBrowser] Fetching Wyvern API page ${pageNum}`);
 
                     // Map sort options to Wyvern format
                     let wyvernSort = 'votes';
@@ -2289,9 +2281,9 @@ function setupWyvernPaginationListeners(gridContainer, state, menuContent, showC
                     updateCachedFiltersAndDropdowns(state, menuContent);
                     renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
 
-                    console.log(`[Bot Browser] Displaying Wyvern API page ${pageNum} (${cards.length} cards)`);
+                    console.log(`[CleanBotBrowser] Displaying Wyvern API page ${pageNum} (${cards.length} cards)`);
                 } catch (error) {
-                    console.error('[Bot Browser] Failed to fetch Wyvern page:', error);
+                    console.error('[CleanBotBrowser] Failed to fetch Wyvern page:', error);
                     toastr.error('Failed to load page');
                 } finally {
                     btn.disabled = false;
@@ -2324,7 +2316,7 @@ function setupChubTrendingPaginationListeners(gridContainer, state, menuContent,
                 btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
 
                 try {
-                    console.log(`[Bot Browser] Fetching Chub trending page ${pageNum}`);
+                    console.log(`[CleanBotBrowser] Fetching Chub trending page ${pageNum}`);
                     const result = await fetchChubTrending({
                         page: pageNum,
                         limit: 48,
@@ -2339,9 +2331,9 @@ function setupChubTrendingPaginationListeners(gridContainer, state, menuContent,
                     state.totalPages = 1;
 
                     renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
-                    console.log(`[Bot Browser] Displaying Chub trending page ${pageNum} (${cards.length} cards)`);
+                    console.log(`[CleanBotBrowser] Displaying Chub trending page ${pageNum} (${cards.length} cards)`);
                 } catch (error) {
-                    console.error('[Bot Browser] Failed to fetch Chub trending page:', error);
+                    console.error('[CleanBotBrowser] Failed to fetch Chub trending page:', error);
                     toastr.error('Failed to load page');
                 } finally {
                     btn.disabled = false;
@@ -2374,7 +2366,7 @@ function setupJannyTrendingPaginationListeners(gridContainer, state, menuContent
                 btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
 
                 try {
-                    console.log(`[Bot Browser] Fetching JanitorAI/JannyAI trending page ${pageNum}`);
+                    console.log(`[CleanBotBrowser] Fetching JanitorAI/JannyAI trending page ${pageNum}`);
                     const result = await fetchJannyTrending({ page: pageNum, limit: 40 });
                     const cards = (result.characters || []).map(transformJannyTrendingCard);
 
@@ -2385,9 +2377,9 @@ function setupJannyTrendingPaginationListeners(gridContainer, state, menuContent
                     state.totalPages = 1;
 
                     renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
-                    console.log(`[Bot Browser] Displaying JanitorAI/JannyAI trending page ${pageNum} (${cards.length} cards)`);
+                    console.log(`[CleanBotBrowser] Displaying JanitorAI/JannyAI trending page ${pageNum} (${cards.length} cards)`);
                 } catch (error) {
-                    console.error('[Bot Browser] Failed to fetch JannyAI trending page:', error);
+                    console.error('[CleanBotBrowser] Failed to fetch JannyAI trending page:', error);
                     toastr.error('Failed to load page');
                 } finally {
                     btn.disabled = false;
@@ -2420,7 +2412,7 @@ function setupWyvernTrendingPaginationListeners(gridContainer, state, menuConten
                 btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
 
                 try {
-                    console.log(`[Bot Browser] Fetching Wyvern trending page ${pageNum}`);
+                    console.log(`[CleanBotBrowser] Fetching Wyvern trending page ${pageNum}`);
                     const result = await fetchWyvernTrending({
                         page: pageNum,
                         limit: 40,
@@ -2436,9 +2428,9 @@ function setupWyvernTrendingPaginationListeners(gridContainer, state, menuConten
                     state.totalPages = 1;
 
                     renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
-                    console.log(`[Bot Browser] Displaying Wyvern trending page ${pageNum} (${cards.length} cards)`);
+                    console.log(`[CleanBotBrowser] Displaying Wyvern trending page ${pageNum} (${cards.length} cards)`);
                 } catch (error) {
-                    console.error('[Bot Browser] Failed to fetch Wyvern trending page:', error);
+                    console.error('[CleanBotBrowser] Failed to fetch Wyvern trending page:', error);
                     toastr.error('Failed to load page');
                 } finally {
                     btn.disabled = false;
@@ -2470,7 +2462,7 @@ function setupRisuRealmTrendingPaginationListeners(gridContainer, state, menuCon
                 btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
 
                 try {
-                    console.log(`[Bot Browser] Fetching RisuRealm trending page ${pageNum}`);
+                    console.log(`[CleanBotBrowser] Fetching RisuRealm trending page ${pageNum}`);
                     const result = await fetchRisuRealmTrending({
                         page: pageNum,
                         nsfw: !extension_settings[extensionName].hideNsfw
@@ -2488,9 +2480,9 @@ function setupRisuRealmTrendingPaginationListeners(gridContainer, state, menuCon
                     state.totalPages = 1;
 
                     renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
-                    console.log(`[Bot Browser] Displaying RisuRealm trending page ${pageNum} (${cards.length} cards)`);
+                    console.log(`[CleanBotBrowser] Displaying RisuRealm trending page ${pageNum} (${cards.length} cards)`);
                 } catch (error) {
-                    console.error('[Bot Browser] Failed to fetch RisuRealm trending page:', error);
+                    console.error('[CleanBotBrowser] Failed to fetch RisuRealm trending page:', error);
                     toastr.error('Failed to load page');
                 } finally {
                     btn.disabled = false;
@@ -2522,7 +2514,7 @@ function setupBackyardTrendingPaginationListeners(gridContainer, state, menuCont
                 btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
 
                 try {
-                    console.log('[Bot Browser] Loading more Backyard.ai trending');
+                    console.log('[CleanBotBrowser] Loading more Backyard.ai trending');
                     const result = await loadMoreBackyardTrending({
                         type: extension_settings[extensionName].hideNsfw ? 'sfw' : 'all'
                     });
@@ -2539,9 +2531,9 @@ function setupBackyardTrendingPaginationListeners(gridContainer, state, menuCont
                     state.totalPages = 1;
 
                     renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
-                    console.log(`[Bot Browser] Loaded ${cards.length} more Backyard.ai trending cards`);
+                    console.log(`[CleanBotBrowser] Loaded ${cards.length} more Backyard.ai trending cards`);
                 } catch (error) {
-                    console.error('[Bot Browser] Failed to load Backyard.ai trending:', error);
+                    console.error('[CleanBotBrowser] Failed to load Backyard.ai trending:', error);
                     toastr.error('Failed to load more cards');
                 } finally {
                     btn.disabled = false;
@@ -2565,7 +2557,7 @@ function setupBackyardPaginationListeners(gridContainer, state, menuContent, sho
                 btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
 
                 try {
-                    console.log('[Bot Browser] Loading more Backyard.ai cards');
+                    console.log('[CleanBotBrowser] Loading more Backyard.ai cards');
                     const cards = await loadMoreBackyardCharacters({
                         type: extension_settings[extensionName].hideNsfw ? 'sfw' : 'all'
                     });
@@ -2577,9 +2569,9 @@ function setupBackyardPaginationListeners(gridContainer, state, menuContent, sho
                     state.totalPages = 1;
 
                     renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
-                    console.log(`[Bot Browser] Loaded ${cards.length} more Backyard.ai cards`);
+                    console.log(`[CleanBotBrowser] Loaded ${cards.length} more Backyard.ai cards`);
                 } catch (error) {
-                    console.error('[Bot Browser] Failed to load more Backyard.ai cards:', error);
+                    console.error('[CleanBotBrowser] Failed to load more Backyard.ai cards:', error);
                     toastr.error('Failed to load more cards');
                 } finally {
                     btn.disabled = false;
@@ -2605,7 +2597,7 @@ function setupPygmalionPaginationListeners(gridContainer, state, menuContent, sh
                 btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
 
                 try {
-                    console.log(`[Bot Browser] Loading more Pygmalion ${isTrending ? 'trending ' : ''}cards`);
+                    console.log(`[CleanBotBrowser] Loading more Pygmalion ${isTrending ? 'trending ' : ''}cards`);
                     let cards = await loadMorePygmalionCharacters({
                         includeSensitive: !extension_settings[extensionName].hideNsfw
                     });
@@ -2626,9 +2618,9 @@ function setupPygmalionPaginationListeners(gridContainer, state, menuContent, sh
                     state.totalPages = 1;
 
                     renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
-                    console.log(`[Bot Browser] Loaded ${cards.length} more Pygmalion ${isTrending ? 'trending ' : ''}cards`);
+                    console.log(`[CleanBotBrowser] Loaded ${cards.length} more Pygmalion ${isTrending ? 'trending ' : ''}cards`);
                 } catch (error) {
-                    console.error('[Bot Browser] Failed to load more Pygmalion cards:', error);
+                    console.error('[CleanBotBrowser] Failed to load more Pygmalion cards:', error);
                     toastr.error('Failed to load more cards');
                 } finally {
                     btn.disabled = false;
@@ -2661,7 +2653,7 @@ function setupRisuRealmPaginationListeners(gridContainer, state, menuContent, sh
             btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
 
             try {
-                console.log(`[Bot Browser] Loading RisuRealm page ${targetPage}`);
+                console.log(`[CleanBotBrowser] Loading RisuRealm page ${targetPage}`);
                 const result = await searchRisuRealm({
                     page: targetPage,
                     sort: risuRealmApiState.lastSort,
@@ -2682,53 +2674,13 @@ function setupRisuRealmPaginationListeners(gridContainer, state, menuContent, sh
                 state.totalPages = 1;
 
                 renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
-                console.log(`[Bot Browser] Loaded RisuRealm page ${risuRealmApiState.page} (${cards.length} cards)`);
+                console.log(`[CleanBotBrowser] Loaded RisuRealm page ${risuRealmApiState.page} (${cards.length} cards)`);
             } catch (error) {
-                console.error('[Bot Browser] Failed to load RisuRealm page:', error);
+                console.error('[CleanBotBrowser] Failed to load RisuRealm page:', error);
                 toastr.error('Failed to load page');
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = originalHTML;
-            }
-        });
-    });
-}
-
-function setupCharaVaultPaginationListeners(gridContainer, state, menuContent, showCardDetailFunc, extensionName, extension_settings) {
-    const pagination = gridContainer.querySelector('.bot-browser-pagination');
-    if (!pagination) return;
-
-    pagination.querySelectorAll('.bot-browser-pagination-btn').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            if (btn.dataset.action !== 'next' || !charavaultApiState.hasMore) return;
-
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
-
-            try {
-                const result = await searchCharavaultCards({
-                    search: charavaultApiState.lastSearch,
-                    sort: charavaultApiState.lastSort,
-                    offset: charavaultApiState.offset
-                });
-
-                const cards = result.characters.map(transformCharavaultCard);
-                charavaultApiState.offset = result.nextOffset;
-                charavaultApiState.hasMore = result.hasMore;
-
-                state.currentCards = [...state.currentCards, ...cards];
-                state.filteredCards = applyClientSideFilters(state.currentCards, state, extensionName, extension_settings);
-                state.currentPage = 1;
-                state.totalPages = 1;
-
-                renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
-                console.log(`[Bot Browser] Loaded ${cards.length} more CharaVault cards`);
-            } catch (error) {
-                console.error('[Bot Browser] Failed to load more CharaVault cards:', error);
-                toastr.error('Failed to load more cards');
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = 'Load More <i class="fa-solid fa-angle-right"></i>';
             }
         });
     });
@@ -2763,9 +2715,9 @@ function setupSakuraPaginationListeners(gridContainer, state, menuContent, showC
                 state.totalPages = 1;
 
                 renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
-                console.log(`[Bot Browser] Loaded ${cards.length} more Sakura.fm cards`);
+                console.log(`[CleanBotBrowser] Loaded ${cards.length} more Sakura.fm cards`);
             } catch (error) {
-                console.error('[Bot Browser] Failed to load more Sakura.fm cards:', error);
+                console.error('[CleanBotBrowser] Failed to load more Sakura.fm cards:', error);
                 toastr.error('Failed to load more cards');
             } finally {
                 btn.disabled = false;
@@ -2804,9 +2756,9 @@ function setupSaucepanPaginationListeners(gridContainer, state, menuContent, sho
                 state.totalPages = 1;
 
                 renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
-                console.log(`[Bot Browser] Loaded ${cards.length} more Saucepan cards`);
+                console.log(`[CleanBotBrowser] Loaded ${cards.length} more Saucepan cards`);
             } catch (error) {
-                console.error('[Bot Browser] Failed to load more Saucepan cards:', error);
+                console.error('[CleanBotBrowser] Failed to load more Saucepan cards:', error);
                 toastr.error('Failed to load more cards');
             } finally {
                 btn.disabled = false;
@@ -2845,9 +2797,9 @@ function setupCrushonPaginationListeners(gridContainer, state, menuContent, show
                 state.totalPages = 1;
 
                 renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
-                console.log(`[Bot Browser] Loaded ${cards.length} more CrushOn.ai cards`);
+                console.log(`[CleanBotBrowser] Loaded ${cards.length} more CrushOn.ai cards`);
             } catch (error) {
-                console.error('[Bot Browser] Failed to load more CrushOn.ai cards:', error);
+                console.error('[CleanBotBrowser] Failed to load more CrushOn.ai cards:', error);
                 toastr.error('Failed to load more cards');
             } finally {
                 btn.disabled = false;
@@ -2885,9 +2837,9 @@ function setupHarpyPaginationListeners(gridContainer, state, menuContent, showCa
                 state.totalPages = 1;
 
                 renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
-                console.log(`[Bot Browser] Loaded ${cards.length} more Harpy.chat cards`);
+                console.log(`[CleanBotBrowser] Loaded ${cards.length} more Harpy.chat cards`);
             } catch (error) {
-                console.error('[Bot Browser] Failed to load more Harpy.chat cards:', error);
+                console.error('[CleanBotBrowser] Failed to load more Harpy.chat cards:', error);
                 toastr.error('Failed to load more cards');
             } finally {
                 btn.disabled = false;

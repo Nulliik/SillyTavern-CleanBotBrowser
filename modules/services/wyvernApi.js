@@ -34,9 +34,9 @@ async function fetchWyvernResponse(url, service = 'wyvern') {
             return response;
         }
 
-        console.warn(`[Bot Browser] Wyvern direct fetch failed (${response.status}), falling back to proxy:`, url);
+        console.warn(`[CleanBotBrowser] Wyvern direct fetch failed (${response.status}), falling back to proxy:`, url);
     } catch (error) {
-        console.warn('[Bot Browser] Wyvern direct fetch failed, falling back to proxy:', error);
+        console.warn('[CleanBotBrowser] Wyvern direct fetch failed, falling back to proxy:', error);
     }
 
     return proxiedFetch(url, {
@@ -389,7 +389,7 @@ export async function searchWyvernCharacters(options = {}) {
         }
 
         const url = `${WYVERN_API_BASE}/characters/public?${params.toString()}`;
-        console.log('[Bot Browser] Wyvern API request:', url);
+        console.log('[CleanBotBrowser] Wyvern API request:', url);
 
         const response = await fetchWyvernResponse(url, 'wyvern');
         if (!response.ok) {
@@ -411,7 +411,7 @@ export async function searchWyvernCharacters(options = {}) {
         wyvernApiState.lastOrder = order;
         wyvernApiState.isLoading = false;
 
-        console.log(`[Bot Browser] Wyvern API returned ${characters.length} characters (page ${page}/${totalPages}, total: ${total})`);
+        console.log(`[CleanBotBrowser] Wyvern API returned ${characters.length} characters (page ${page}/${totalPages}, total: ${total})`);
 
         return {
             results: characters,
@@ -422,7 +422,7 @@ export async function searchWyvernCharacters(options = {}) {
         };
     } catch (error) {
         wyvernApiState.isLoading = false;
-        console.error('[Bot Browser] Wyvern API error:', error);
+        console.error('[CleanBotBrowser] Wyvern API error:', error);
         throw error;
     }
 }
@@ -466,7 +466,7 @@ export async function searchWyvernLorebooks(options = {}) {
         }
 
         const url = `${WYVERN_API_BASE}/lorebooks/public?${params.toString()}`;
-        console.log('[Bot Browser] Wyvern Lorebooks API request:', url);
+        console.log('[CleanBotBrowser] Wyvern Lorebooks API request:', url);
 
         const response = await fetchWyvernResponse(url, 'wyvern_lorebooks');
         if (!response.ok) {
@@ -487,7 +487,7 @@ export async function searchWyvernLorebooks(options = {}) {
         wyvernLorebooksApiState.lastOrder = order;
         wyvernLorebooksApiState.isLoading = false;
 
-        console.log(`[Bot Browser] Wyvern Lorebooks API returned ${lorebooks.length} lorebooks (page ${page}/${totalPages}, total: ${total})`);
+        console.log(`[CleanBotBrowser] Wyvern Lorebooks API returned ${lorebooks.length} lorebooks (page ${page}/${totalPages}, total: ${total})`);
 
         return {
             results: lorebooks,
@@ -498,13 +498,13 @@ export async function searchWyvernLorebooks(options = {}) {
         };
     } catch (error) {
         wyvernLorebooksApiState.isLoading = false;
-        console.error('[Bot Browser] Wyvern Lorebooks API error:', error);
+        console.error('[CleanBotBrowser] Wyvern Lorebooks API error:', error);
         throw error;
     }
 }
 
 /**
- * Transform Wyvern character to BotBrowser card format
+ * Transform Wyvern character to CleanBotBrowser card format
  *
  * ACTUAL Wyvern API fields (verified from real API response):
  * - name: character name
@@ -550,7 +550,7 @@ export function transformWyvernCard(node) {
     const galleryImages = buildWyvernGalleryImages(node);
 
     // Debug logging
-    console.log(`[Bot Browser] transformWyvernCard for "${node.name}":`, {
+    console.log(`[CleanBotBrowser] transformWyvernCard for "${node.name}":`, {
         'description (char def)': charDescription?.substring(0, 80),
         'first_mes': firstMessage?.substring(0, 80),
         'scenario': scenario?.substring(0, 80),
@@ -727,7 +727,7 @@ export function transformFullWyvernLorebook(node) {
 }
 
 /**
- * Transform Wyvern lorebook to BotBrowser format
+ * Transform Wyvern lorebook to CleanBotBrowser format
  */
 export function transformWyvernLorebook(node) {
     const creatorName = textOrEmpty(node.creator?.displayName) || textOrEmpty(node.creator?.vanityUrl) || 'Unknown';
@@ -900,7 +900,7 @@ export async function fetchWyvernCreatorCards(options = {}) {
         params.set('show_nsfw', 'true');
 
         const url = `${WYVERN_API_BASE}/characters/user/${uid}?${params.toString()}`;
-        console.log('[Bot Browser] Wyvern Creator API request:', url);
+        console.log('[CleanBotBrowser] Wyvern Creator API request:', url);
 
         const response = await fetchWyvernResponse(url);
 
@@ -913,7 +913,7 @@ export async function fetchWyvernCreatorCards(options = {}) {
         const characters = data.characters || [];
         const total = Number(data.total || characters.length || 0);
 
-        console.log(`[Bot Browser] Wyvern Creator API returned ${characters.length} characters (page ${page}, total: ${total})`);
+        console.log(`[CleanBotBrowser] Wyvern Creator API returned ${characters.length} characters (page ${page}, total: ${total})`);
 
         return {
             cards: characters.map(transformWyvernCard),
@@ -921,7 +921,7 @@ export async function fetchWyvernCreatorCards(options = {}) {
             hasMore: page * limit < total
         };
     } catch (error) {
-        console.error('[Bot Browser] Wyvern Creator API error:', error);
+        console.error('[CleanBotBrowser] Wyvern Creator API error:', error);
         throw error;
     }
 }

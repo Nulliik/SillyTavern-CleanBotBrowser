@@ -1,4 +1,4 @@
-// CORS Proxy Module for Bot Browser
+// CORS Proxy Module for CleanBotBrowser
 // Provides modular CORS proxy support with fallbacks and Puter.js integration
 
 /**
@@ -50,7 +50,7 @@ const DIRECT_FIRST_PROXY_CHAIN = [
  */
 const PROXY_CONFIGS = {
     [PROXY_TYPES.PLUGIN]: {
-        name: 'BotBrowser Plugin',
+        name: 'CleanBotBrowser Plugin',
         buildUrl: null,
         rateLimit: 'Local SillyTavern server plugin'
     },
@@ -139,9 +139,6 @@ const SERVICE_PROXY_MAP = {
     pygmalion: PLUGIN_FIRST_PROXY_CHAIN,
     pygmalion_trending: PLUGIN_FIRST_PROXY_CHAIN,
 
-    // CharaVault - Cloudflare protected
-    charavault: PLUGIN_FIRST_PROXY_CHAIN,
-
     // Sakura.fm
     sakura: PLUGIN_FIRST_PROXY_CHAIN,
 
@@ -210,7 +207,7 @@ function debugWarn(...args) {
     if (isDebugEnabled()) console.warn(...args);
 }
 
-async function probeBotBrowserPlugin() {
+async function probeCleanBotBrowserPlugin() {
     try {
         if (typeof window !== 'undefined') {
             const globalStatus = window.__BOT_BROWSER_PLUGIN_STATUS;
@@ -260,13 +257,13 @@ async function probeBotBrowserPlugin() {
     return pluginProbePromise;
 }
 
-export function clearBotBrowserPluginProbeCache() {
+export function clearCleanBotBrowserPluginProbeCache() {
     pluginAvailable = null;
     pluginProbePromise = null;
 }
 
-export async function isBotBrowserPluginAvailable() {
-    return probeBotBrowserPlugin();
+export async function isCleanBotBrowserPluginAvailable() {
+    return probeCleanBotBrowserPlugin();
 }
 
 function headersToObject(headers) {
@@ -512,8 +509,8 @@ function serializePluginBody(body, headers = {}) {
 }
 
 async function pluginFetch(url, options = {}, timeoutMs = DEFAULT_TIMEOUT_MS) {
-    if (!(await probeBotBrowserPlugin())) {
-        throw new Error('Bot Browser plugin is not available');
+    if (!(await probeCleanBotBrowserPlugin())) {
+        throw new Error('CleanBotBrowser plugin is not available');
     }
 
     const requestHeaders = headersToObject(options.headers);
@@ -647,7 +644,7 @@ export async function proxiedFetch(url, options = {}) {
 
     let proxies = proxyChain || getProxyChainForService(service);
     const pluginReady = proxies.includes(PROXY_TYPES.PLUGIN)
-        ? await probeBotBrowserPlugin().catch(() => false)
+        ? await probeCleanBotBrowserPlugin().catch(() => false)
         : false;
     const allowPublicRelayFallback = isPublicRelayFallbackEnabled();
 

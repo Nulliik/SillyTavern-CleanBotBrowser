@@ -129,7 +129,7 @@ async function resolveJannyCharacterUrl(characterId, searchHint = '') {
         jannyCharacterUrlCache.set(normalizedId, fullUrl);
         return fullUrl;
     } catch (error) {
-        console.warn('[Bot Browser] Failed to resolve JannyAI canonical URL:', error?.message || error);
+        console.warn('[CleanBotBrowser] Failed to resolve JannyAI canonical URL:', error?.message || error);
         return '';
     }
 }
@@ -167,7 +167,7 @@ async function getSearchToken() {
                 if (!searchPageMatch) {
                     // Debug: log what scripts we found
                     const allScripts = pageHtml.match(/\/_astro\/[^"'\s]+\.js/g) || [];
-                    if (DEBUG) console.log('[Bot Browser] Available scripts:', allScripts.slice(0, 10));
+                    if (DEBUG) console.log('[CleanBotBrowser] Available scripts:', allScripts.slice(0, 10));
                     throw new Error('Could not find client-config or SearchPage JS file');
                 }
 
@@ -200,7 +200,7 @@ async function getSearchToken() {
             }
 
             cachedToken = tokenMatch[1];
-            if (DEBUG) console.log('[Bot Browser] Fetched fresh JannyAI search token');
+            if (DEBUG) console.log('[CleanBotBrowser] Fetched fresh JannyAI search token');
             return cachedToken;
         } catch (error) {
             throw new Error(`Failed to fetch JannyAI search token from the live site: ${error.message}`);
@@ -471,7 +471,7 @@ async function resolveJannyCreatorFromSearch(creatorName) {
                 try {
                     return await fetchJannyCharacterDetails(hit.id, normalizeJannySlugValue('', hit.slug || hit.name || ''));
                 } catch (error) {
-                    console.warn('[Bot Browser] Janny creator resolution failed for hit:', hit?.id, error);
+                    console.warn('[CleanBotBrowser] Janny creator resolution failed for hit:', hit?.id, error);
                     return null;
                 }
             }));
@@ -652,7 +652,7 @@ export async function searchJannyCharacters(options = {}) {
         }]
     };
 
-    if (DEBUG) console.log('[Bot Browser] JannyAI search request:', requestBody);
+    if (DEBUG) console.log('[CleanBotBrowser] JannyAI search request:', requestBody);
 
     const baseHeaders = {
         'Accept': '*/*',
@@ -689,7 +689,7 @@ export async function searchJannyCharacters(options = {}) {
     }
 
     const data = await response.json();
-    if (DEBUG) console.log('[Bot Browser] JannyAI search response:', data);
+    if (DEBUG) console.log('[CleanBotBrowser] JannyAI search response:', data);
     return data;
 }
 
@@ -717,7 +717,7 @@ export async function fetchJannyCharacterDetails(characterId, slug, fallbackName
 
     const characterUrl = getJannyCharacterUrl(normalizedId, slug, fallbackName);
 
-    if (DEBUG) console.log('[Bot Browser] Fetching JannyAI character:', characterUrl);
+    if (DEBUG) console.log('[CleanBotBrowser] Fetching JannyAI character:', characterUrl);
 
     let response = await fetchJannyHtml(characterUrl);
     let finalUrl = characterUrl;
@@ -794,7 +794,7 @@ function parseAstroCharacterIsland(html) {
     try {
         propsJson = JSON.parse(propsDecoded);
     } catch (e) {
-        console.error('[Bot Browser] Failed to parse JannyAI props:', e);
+        console.error('[CleanBotBrowser] Failed to parse JannyAI props:', e);
         throw new Error('Failed to parse character data from JannyAI page');
     }
 
@@ -813,7 +813,7 @@ function parseJannyHtmlDocument(html) {
     try {
         return new DOMParser().parseFromString(html, 'text/html');
     } catch (error) {
-        console.warn('[Bot Browser] Failed to parse JannyAI HTML document:', error);
+        console.warn('[CleanBotBrowser] Failed to parse JannyAI HTML document:', error);
         return null;
     }
 }
@@ -990,9 +990,9 @@ function decodeAstroValue(value) {
 }
 
 /**
- * Transform JannyAI search result to BotBrowser card format
+ * Transform JannyAI search result to CleanBotBrowser card format
  * @param {Object} hit - MeiliSearch hit object
- * @returns {Object} Card in BotBrowser format
+ * @returns {Object} Card in CleanBotBrowser format
  */
 export function transformJannyCard(hit) {
     // Map tag IDs to tag names

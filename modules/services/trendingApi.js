@@ -1,4 +1,4 @@
-// Trending APIs for Bot Browser
+// Trending APIs for CleanBotBrowser
 // Fetches trending/popular characters from various sources
 
 import { proxiedFetch, CORS_PROXY } from './corsProxy.js';
@@ -19,7 +19,7 @@ export async function fetchCharacterTavernTrending(options = {}) {
     // CT trending doesn't seem to support pagination based on the API response
     const url = CT_TRENDING_URL;
 
-    console.log('[Bot Browser] Fetching Character Tavern trending:', url);
+    console.log('[CleanBotBrowser] Fetching Character Tavern trending:', url);
 
     const response = await proxiedFetch(url, {
         service: 'character_tavern_trending',
@@ -35,7 +35,7 @@ export async function fetchCharacterTavernTrending(options = {}) {
     }
 
     const data = await response.json();
-    console.log('[Bot Browser] Character Tavern trending response:', data);
+    console.log('[CleanBotBrowser] Character Tavern trending response:', data);
 
     return {
         hits: data.hits || [],
@@ -47,9 +47,9 @@ export async function fetchCharacterTavernTrending(options = {}) {
 }
 
 /**
- * Transform Character Tavern trending hit to BotBrowser card format
+ * Transform Character Tavern trending hit to CleanBotBrowser card format
  * @param {Object} hit - CT trending hit
- * @returns {Object} Card in BotBrowser format
+ * @returns {Object} Card in CleanBotBrowser format
  */
 export function transformCharacterTavernTrendingCard(hit) {
     const isNsfw = hit.isNSFW || (hit.tags || []).some(t => t.toLowerCase() === 'nsfw');
@@ -140,7 +140,7 @@ export async function fetchChubTrending(options = {}) {
     });
 
     const url = `${CHUB_GATEWAY_BASE}/search?${params}`;
-    console.log('[Bot Browser] Fetching Chub trending:', url);
+    console.log('[CleanBotBrowser] Fetching Chub trending:', url);
 
     const response = await proxiedFetch(url, {
         service: 'chub_trending',
@@ -167,7 +167,7 @@ export async function fetchChubTrending(options = {}) {
     chubTrendingState.totalHits = data?.data?.count || nodes.length;
     chubTrendingState.isLoading = false;
 
-    console.log(`[Bot Browser] Chub trending returned ${nodes.length} characters (page ${page})`);
+    console.log(`[CleanBotBrowser] Chub trending returned ${nodes.length} characters (page ${page})`);
 
     return {
         nodes,
@@ -178,9 +178,9 @@ export async function fetchChubTrending(options = {}) {
 }
 
 /**
- * Transform Chub trending node to BotBrowser card format
+ * Transform Chub trending node to CleanBotBrowser card format
  * @param {Object} node - Chub API node
- * @returns {Object} Card in BotBrowser format
+ * @returns {Object} Card in CleanBotBrowser format
  */
 export function transformChubTrendingCard(node) {
     const fullPath = node.fullPath || node.name;
@@ -263,7 +263,7 @@ export async function fetchWyvernTrending(options = {}) {
         });
 
         const url = `${WYVERN_API_BASE}/characters?${params}`;
-        console.log('[Bot Browser] Fetching Wyvern trending:', url);
+        console.log('[CleanBotBrowser] Fetching Wyvern trending:', url);
 
         const response = await proxiedFetch(url, {
             service: 'wyvern_trending',
@@ -286,7 +286,7 @@ export async function fetchWyvernTrending(options = {}) {
         wyvernTrendingState.lastSort = sort;
         wyvernTrendingState.isLoading = false;
 
-        console.log(`[Bot Browser] Wyvern trending returned ${data.results?.length || 0} characters`);
+        console.log(`[CleanBotBrowser] Wyvern trending returned ${data.results?.length || 0} characters`);
 
         return {
             results: data.results || [],
@@ -302,9 +302,9 @@ export async function fetchWyvernTrending(options = {}) {
 }
 
 /**
- * Transform Wyvern trending result to BotBrowser card format
+ * Transform Wyvern trending result to CleanBotBrowser card format
  * @param {Object} node - Wyvern API result
- * @returns {Object} Card in BotBrowser format
+ * @returns {Object} Card in CleanBotBrowser format
  */
 export function transformWyvernTrendingCard(node) {
     const creatorName = node.creator?.displayName || node.creator?.vanityUrl || 'Unknown';
@@ -417,7 +417,7 @@ async function hydrateJannyTrendingCharacters(characters = []) {
         const byId = new Map(hydrated.map((char) => [String(char?.id || ''), char]));
         return characters.map((char) => mergeJannyTrendingCharacter(char, byId.get(String(char?.id || ''))));
     } catch (error) {
-        console.warn('[Bot Browser] JannyAI trending hydration failed, using JanitorAI payload only:', error);
+        console.warn('[CleanBotBrowser] JannyAI trending hydration failed, using JanitorAI payload only:', error);
         return characters;
     }
 }
@@ -444,7 +444,7 @@ export async function fetchJannyTrending(options = {}) {
         });
 
         const url = `${JANITORAI_TRENDING_URL}?${params}`;
-        console.log('[Bot Browser] Fetching JannyAI trending:', url);
+        console.log('[CleanBotBrowser] Fetching JannyAI trending:', url);
 
         const response = await proxiedFetch(url, {
             service: 'jannyai_trending',
@@ -468,7 +468,7 @@ export async function fetchJannyTrending(options = {}) {
         jannyTrendingState.totalHits = data.total || characters.length;
         jannyTrendingState.isLoading = false;
 
-        console.log(`[Bot Browser] JanitorAI trending returned ${characters.length} characters (page ${page})`);
+        console.log(`[CleanBotBrowser] JanitorAI trending returned ${characters.length} characters (page ${page})`);
 
         return {
             characters: hydratedCharacters,
@@ -497,9 +497,9 @@ export async function loadMoreJannyTrending(options = {}) {
 }
 
 /**
- * Transform JanitorAI trending result to BotBrowser card format
+ * Transform JanitorAI trending result to CleanBotBrowser card format
  * @param {Object} char - JanitorAI API character
- * @returns {Object} Card in BotBrowser format
+ * @returns {Object} Card in CleanBotBrowser format
  */
 export function transformJannyTrendingCard(char) {
     const jannyPayload = char?._jannyCharacter || null;
@@ -627,7 +627,7 @@ export async function fetchBackyardTrending(options = {}) {
         backyardTrendingState.hasMore = result.hasMore;
         backyardTrendingState.isLoading = false;
 
-        console.log(`[Bot Browser] Backyard.ai trending returned ${result.characters.length} characters`);
+        console.log(`[CleanBotBrowser] Backyard.ai trending returned ${result.characters.length} characters`);
 
         return {
             characters: result.characters,
@@ -653,7 +653,7 @@ export async function loadMoreBackyardTrending(options = {}) {
 /**
  * Transform Backyard.ai character to trending card format
  * @param {Object} char - Backyard.ai character
- * @returns {Object} BotBrowser card format
+ * @returns {Object} CleanBotBrowser card format
  */
 export function transformBackyardTrendingCard(char) {
     const card = transformBackyardCard(char);

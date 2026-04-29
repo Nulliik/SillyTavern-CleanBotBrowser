@@ -151,7 +151,7 @@ function parseDevalueData(data) {
         const root = resolveDevalueEntry(data, 0) || {};
         return Array.isArray(root.cards) ? root.cards.filter(card => card?.id && card?.name) : [];
     } catch (e) {
-        console.warn('[Bot Browser] Failed to parse RisuRealm cards:', e);
+        console.warn('[CleanBotBrowser] Failed to parse RisuRealm cards:', e);
         return [];
     }
 }
@@ -181,7 +181,7 @@ export async function searchRisuRealm(options = {}) {
             nsfw: !nsfw ? 'false' : undefined,
             _t: Date.now(),
         });
-        console.log('[Bot Browser] RisuRealm API request:', url);
+        console.log('[CleanBotBrowser] RisuRealm API request:', url);
 
         const response = await proxiedFetch(url, {
             service: 'risuai_realm',
@@ -198,7 +198,7 @@ export async function searchRisuRealm(options = {}) {
         }
 
         const json = await response.json();
-        console.log('[Bot Browser] RisuRealm raw response structure:', Object.keys(json));
+        console.log('[CleanBotBrowser] RisuRealm raw response structure:', Object.keys(json));
 
         const { nodeData, root } = decodeRisuRoot(json);
 
@@ -207,7 +207,7 @@ export async function searchRisuRealm(options = {}) {
         // Log card names to verify different data
         const firstCards = cards.slice(0, 3).map(c => c.name);
         const lastCards = cards.slice(-3).map(c => c.name);
-        console.log(`[Bot Browser] RisuRealm page ${page} cards: first=[${firstCards.join(', ')}] last=[${lastCards.join(', ')}]`);
+        console.log(`[CleanBotBrowser] RisuRealm page ${page} cards: first=[${firstCards.join(', ')}] last=[${lastCards.join(', ')}]`);
 
         // Get pagination info from metadata
         // The metadata structure varies - look for totalPages, pages, or page count
@@ -233,8 +233,8 @@ export async function searchRisuRealm(options = {}) {
         risuRealmApiState.lastSearch = search;
         risuRealmApiState.lastSort = sort;
 
-        console.log(`[Bot Browser] RisuRealm API returned ${cards.length} cards (page ${page}, hasMore: ${hasMore})`);
-        console.log('[Bot Browser] RisuRealm metadata:', JSON.stringify(metadata));
+        console.log(`[CleanBotBrowser] RisuRealm API returned ${cards.length} cards (page ${page}, hasMore: ${hasMore})`);
+        console.log('[CleanBotBrowser] RisuRealm metadata:', JSON.stringify(metadata));
 
         return {
             cards,
@@ -243,7 +243,7 @@ export async function searchRisuRealm(options = {}) {
             hasMore
         };
     } catch (error) {
-        console.error('[Bot Browser] RisuRealm API error:', error);
+        console.error('[CleanBotBrowser] RisuRealm API error:', error);
         throw error;
     } finally {
         risuRealmApiState.isLoading = false;
@@ -290,7 +290,7 @@ export async function fetchRisuRealmTrending(options = {}) {
  */
 export async function fetchRisuRealmCharacter(characterId) {
     const url = buildRisuDataUrl(`/character/${encodeURIComponent(characterId)}/__data.json`);
-    console.log('[Bot Browser] RisuRealm Character API request:', url);
+    console.log('[CleanBotBrowser] RisuRealm Character API request:', url);
 
     const response = await proxiedFetch(url, {
         service: 'risuai_realm',
@@ -316,7 +316,7 @@ export async function fetchRisuRealmCharacter(characterId) {
         card.descHTML = root.descHTML;
     }
 
-    console.log('[Bot Browser] RisuRealm Character loaded:', card.name);
+    console.log('[CleanBotBrowser] RisuRealm Character loaded:', card.name);
     return card;
 }
 
@@ -399,7 +399,7 @@ export async function fetchRisuRealmCreatorProfile(username) {
     }
 
     const url = buildRisuDataUrl(`/creator/${encodeURIComponent(handle)}/__data.json`);
-    console.log('[Bot Browser] RisuRealm Creator API request:', url);
+    console.log('[CleanBotBrowser] RisuRealm Creator API request:', url);
 
     const response = await proxiedFetch(url, {
         service: 'risuai_realm',
@@ -444,9 +444,9 @@ function stripHtml(html) {
 }
 
 /**
- * Transform full RisuRealm character to BotBrowser format
+ * Transform full RisuRealm character to CleanBotBrowser format
  * @param {Object} card - Full RisuRealm character data
- * @returns {Object} Full BotBrowser card format
+ * @returns {Object} Full CleanBotBrowser card format
  */
 export function transformFullRisuRealmCharacter(card) {
     const baseCard = transformRisuRealmCard(card);
@@ -471,9 +471,9 @@ export function transformFullRisuRealmCharacter(card) {
 }
 
 /**
- * Transform RisuRealm card to BotBrowser format
+ * Transform RisuRealm card to CleanBotBrowser format
  * @param {Object} card - RisuRealm card object
- * @returns {Object} BotBrowser card format
+ * @returns {Object} CleanBotBrowser card format
  */
 export function transformRisuRealmCard(card) {
     const tags = Array.isArray(card.tags) ? card.tags : [];

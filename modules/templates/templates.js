@@ -73,7 +73,7 @@ function formatCompact(num) {
 export function getOriginalMenuHTML(recentlyViewed) {
     return `
         <div class="bot-browser-header">
-            <h3>Bot Browser <span style="font-size: 0.6em; font-weight: 400; color: rgba(255, 255, 255, 0.6);">v2.0.5</span></h3>
+            <h3>CleanBotBrowser <span style="font-size: 0.6em; font-weight: 400; color: rgba(255, 255, 255, 0.6);">v1.0</span></h3>
             <div class="bot-browser-tabs">
                 <button class="bot-browser-tab active" data-tab="bots">Bots</button>
                 <button class="bot-browser-tab" data-tab="lorebooks">Lorebooks</button>
@@ -187,10 +187,6 @@ export function getOriginalMenuHTML(recentlyViewed) {
                 <button class="bot-browser-source" data-source="risuai_realm">
                     <div class="bot-browser-source-icon" style="background-image: url('https://realm.risuai.net/icon.png'); background-size: cover; background-position: center; background-repeat: no-repeat;"></div>
                     <span>Risuai Realm</span>
-                </button>
-                <button class="bot-browser-source" data-source="charavault">
-                    <div class="bot-browser-source-icon" style="background-image: url('https://charavault.net/favicon.svg'); background-size: 75%; background-position: center; background-repeat: no-repeat; background-color: #0a0a0f;"></div>
-                    <span>CharaVault</span>
                 </button>
                 <button class="bot-browser-source" data-source="crushon">
                     <div class="bot-browser-source-icon" style="background-image: url('https://crushon.ai/favicon-64x64.png'); background-size: cover; background-position: center; background-repeat: no-repeat;"></div>

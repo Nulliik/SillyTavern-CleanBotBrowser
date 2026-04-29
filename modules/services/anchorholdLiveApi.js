@@ -279,7 +279,6 @@ function inferCreatorHintFromLinks(links) {
 
             if (hostname === 'chub.ai' && segments[0] === 'users' && segments[1]) return segments[1];
             if ((hostname === 'character-tavern.com' || hostname === 'charactertavern.com') && segments[0] === 'user' && segments[1]) return segments[1];
-            if (hostname === 'charavault.net' && segments[0] === 'users' && segments[1]) return segments[1];
             if (hostname === 'sakura.fm' && segments[0] === 'u' && segments[1]) return segments[1];
             if (hostname === 'harpy.chat' && segments[0] === 'profile' && segments[1]) return segments[1];
         } catch {
@@ -853,21 +852,6 @@ function parseProviderUrl(url, fallbackName, fallbackCreator) {
         };
     }
 
-    if (hostname === 'charavault.net' && segments[0] === 'cards' && segments[1] && segments[2]) {
-        const folder = segments[1];
-        const file = segments.slice(2).join('/');
-        const canonicalName = humanizeSlug(file);
-        return {
-            service: 'charavault',
-            id: `${folder}/${file}`,
-            _folder: folder,
-            _file: file,
-            creator: fallbackCreator,
-            name: canonicalName || fallbackName,
-            url: text,
-        };
-    }
-
     if (hostname === 'realm.risuai.net' && segments[0] === 'character' && segments[1]) {
         return {
             service: 'risuai_realm',
@@ -1057,7 +1041,6 @@ function shouldPreferCanonicalProviderName(provider) {
     return [
         'chub',
         'character_tavern',
-        'charavault',
         'jannyai',
         'caibotlist',
     ].includes(service);
