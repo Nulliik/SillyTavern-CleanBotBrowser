@@ -402,8 +402,9 @@ function showImageError(imageDiv, errorCode, imageUrl, silent = false) {
     }
 }
 
-export async function getRandomCard(source, currentCards, loadServiceIndexFunc) {
+export async function getRandomCard(source, currentCards, loadServiceIndexFunc, options = {}) {
     try {
+        const { silentNoCards = false } = options;
         let cards = [];
 
         if (source === 'current' && currentCards.length > 0) {
@@ -416,9 +417,23 @@ export async function getRandomCard(source, currentCards, loadServiceIndexFunc) 
             // Random from all sources
             toastr.info('Loading all cards...', '', { timeOut: 1500 });
             const serviceNames = ['anchorhold', 'catbox', 'character_tavern', 'chub', 'nyai_me', 'risuai_realm', 'webring', 'mlpchag', 'desuarchive'];
+            const failedServices = [];
 
             for (const service of serviceNames) {
-                const serviceCards = await loadServiceIndexFunc(service);
+                let serviceCards = [];
+                try {
+                    serviceCards = await loadServiceIndexFunc(service);
+                } catch (error) {
+                    failedServices.push(service);
+                    console.warn(`[Bot Browser] Random card source failed and will be skipped: ${service}`, error);
+                    continue;
+                }
+
+                if (!Array.isArray(serviceCards)) {
+                    console.warn(`[Bot Browser] Random card source returned invalid data and will be skipped: ${service}`);
+                    continue;
+                }
+
                 const cardsWithSource = serviceCards.map(card => ({
                     ...card,
                     sourceService: service
@@ -427,6 +442,10 @@ export async function getRandomCard(source, currentCards, loadServiceIndexFunc) 
                     return imageUrl && imageUrl.trim().length > 0 && (imageUrl.startsWith('http://') || imageUrl.startsWith('https://'));
                 });
                 cards = cards.concat(cardsWithSource);
+            }
+
+            if (failedServices.length > 0) {
+                console.warn(`[Bot Browser] Random card skipped ${failedServices.length} failed source(s): ${failedServices.join(', ')}`);
             }
         } else {
             // Random from specific service
@@ -437,7 +456,9 @@ export async function getRandomCard(source, currentCards, loadServiceIndexFunc) 
         }
 
         if (cards.length === 0) {
-            toastr.warning('No cards available');
+            if (!silentNoCards) {
+                toastr.warning('No cards available');
+            }
             return null;
         }
 

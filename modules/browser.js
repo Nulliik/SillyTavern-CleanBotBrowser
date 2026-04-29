@@ -126,10 +126,11 @@ function applyClientSideFilters(cards, state, extensionName, extension_settings)
     const cardsWithImages = filtered.filter(card => {
         const imageUrl = card.avatar_url || card.image_url;
         const hasValidImage = imageUrl && imageUrl.trim().length > 0 && (imageUrl.startsWith('http://') || imageUrl.startsWith('https://'));
-        if (!hasValidImage) {
+        const canRenderWithoutImage = card.isLorebook || card.isLocal || card.service === 'my_lorebooks' || card.sourceService === 'my_lorebooks';
+        if (!hasValidImage && !canRenderWithoutImage) {
             console.log(`[Bot Browser] No valid image: Hiding "${card.name}" - image URL: "${imageUrl || 'none'}"`);
         }
-        return hasValidImage;
+        return hasValidImage || canRenderWithoutImage;
     });
 
     console.log(`[Bot Browser] applyClientSideFilters: ${cards.length} input -> ${filtered.length} after blocklist/NSFW -> ${cardsWithImages.length} after image filter`);
@@ -350,7 +351,8 @@ export async function createCardBrowser(serviceName, cards, state, extensionName
 
     const cardsWithImages = sortedCards.filter(card => {
         const imageUrl = card.avatar_url || card.image_url;
-        return imageUrl && imageUrl.trim().length > 0 && (imageUrl.startsWith('http://') || imageUrl.startsWith('https://'));
+        const hasValidImage = imageUrl && imageUrl.trim().length > 0 && (imageUrl.startsWith('http://') || imageUrl.startsWith('https://'));
+        return hasValidImage || card.isLorebook || card.isLocal || card.service === 'my_lorebooks' || card.sourceService === 'my_lorebooks';
     });
 
     // Store filtered cards for pagination

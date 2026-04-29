@@ -1483,6 +1483,28 @@ function setupSourceButtons(menu) {
                     }
 
                     console.log(`[Bot Browser] Loaded ${cards.length} imported cards`);
+                } else if (sourceName === 'my_characters') {
+                    toastr.info('Loading your local characters...', '', { timeOut: 2000 });
+
+                    const { loadLocalCharacters } = await import('./modules/services/localLibrary.js');
+                    cards = await loadLocalCharacters();
+
+                    if (cards.length === 0) {
+                        toastr.info('No local characters found.', 'My Characters', { timeOut: 4000 });
+                    }
+
+                    console.log(`[Bot Browser] Loaded ${cards.length} local characters`);
+                } else if (sourceName === 'my_lorebooks') {
+                    toastr.info('Loading your local lorebooks...', '', { timeOut: 2000 });
+
+                    const { loadLocalLorebooks } = await import('./modules/services/localLibrary.js');
+                    cards = await loadLocalLorebooks();
+
+                    if (cards.length === 0) {
+                        toastr.info('No local World Info files found.', 'Your Lorebooks', { timeOut: 4000 });
+                    }
+
+                    console.log(`[Bot Browser] Loaded ${cards.length} local lorebooks`);
                 } else if (sourceName === 'jannyai') {
                     // JannyAI uses its own live API
                     toastr.info('Loading JannyAI...', '', { timeOut: 2000 });
@@ -1939,6 +1961,8 @@ function setupBottomButtons(menu) {
 
 // Store current random service for "same source" random button
 let currentRandomService = null;
+let isRandomCardLoading = false;
+const RANDOM_SOURCE_TIMEOUT_MS = 20000;
 
 function getEnabledRandomServiceIds() {
     const configured = extension_settings[extensionName]?.randomServices || {};
@@ -1947,142 +1971,188 @@ function getEnabledRandomServiceIds() {
         .filter(id => configured[id] !== false);
 }
 
+function shuffleRandomServices(serviceNames) {
+    const shuffled = [...serviceNames];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+}
+
+function withTimeout(promise, timeoutMs, label) {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => {
+            setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+        }),
+    ]);
+}
+
+async function loadRandomCardsForService(selectedService) {
+    const useLiveChubApi = extension_settings[extensionName].useChubLiveApi !== false;
+    const useRisuRealmLiveApi = extension_settings[extensionName].useRisuRealmLiveApi !== false;
+
+    // Special handling for live APIs - use random pages for true randomness
+    if (selectedService === 'jannyai') {
+        const searchResults = await searchJannyCharacters({
+            search: '',
+            page: Math.floor(Math.random() * 10) + 1,
+            limit: 40,
+            sort: 'createdAtStamp:desc'
+        });
+        const results = searchResults.results?.[0] || {};
+        return (results.hits || []).map(hit => transformJannyCard(hit));
+    }
+
+    if (selectedService === 'chub' && useLiveChubApi) {
+        const randomPage = Math.floor(Math.random() * 50) + 1;
+        const result = await searchChubCards({
+            search: '',
+            limit: 48,
+            page: randomPage,
+            sort: 'random',
+            nsfw: !extension_settings[extensionName].hideNsfw
+        });
+        const nodes = result?.data?.nodes || result?.nodes || [];
+        return nodes.map(node => ({
+            ...transformChubCard(node),
+            sourceService: 'chub',
+            isLiveChub: true
+        }));
+    }
+
+    if (selectedService === 'risuai_realm' && useRisuRealmLiveApi) {
+        const randomPage = Math.floor(Math.random() * 20) + 1;
+        const result = await searchRisuRealm({
+            search: '',
+            page: randomPage,
+            sort: 'download',
+            nsfw: !extension_settings[extensionName].hideNsfw
+        });
+        return result.cards.map(card => ({
+            ...transformRisuRealmCard(card),
+            sourceService: 'risuai_realm',
+            isLiveApi: true
+        }));
+    }
+
+    if (selectedService === 'pygmalion') {
+        const randomPage = Math.floor(Math.random() * 20) + 1;
+        const result = await searchPygmalionCharacters({
+            query: '',
+            page: randomPage,
+            pageSize: 60,
+            includeSensitive: !extension_settings[extensionName].hideNsfw
+        });
+        return result.characters.map(char => ({
+            ...transformPygmalionCard(char),
+            sourceService: 'pygmalion',
+            isLiveApi: true
+        }));
+    }
+
+    if (selectedService === 'backyard') {
+        const result = await searchBackyardCharacters({
+            search: '',
+            sortBy: BACKYARD_SORT_TYPES.POPULAR,
+            type: extension_settings[extensionName].hideNsfw ? 'sfw' : 'all'
+        });
+        return result.characters.map(char => ({
+            ...transformBackyardCard(char),
+            sourceService: 'backyard',
+            isLiveApi: true
+        }));
+    }
+
+    if (selectedService === 'character_tavern') {
+        const randomPage = Math.floor(Math.random() * 10) + 1;
+        return await searchCharacterTavern({
+            query: '',
+            page: randomPage,
+            limit: 30
+        });
+    }
+
+    if (selectedService === 'wyvern') {
+        const randomPage = Math.floor(Math.random() * 10) + 1;
+        const result = await searchWyvernCharacters({
+            search: '',
+            page: randomPage,
+            limit: 20,
+            sort: 'votes',
+            hideNsfw: extension_settings[extensionName].hideNsfw
+        });
+        return (result.characters || []).map(char => ({
+            ...transformWyvernCard(char),
+            sourceService: 'wyvern',
+            isLiveApi: true
+        }));
+    }
+
+    return await loadServiceIndex(selectedService);
+}
+
 // Play service roulette - instant random selection (no animation)
 async function playServiceRoulette(menu, preferSameService = null) {
+    if (isRandomCardLoading) {
+        console.log('[Bot Browser] Random card request already in progress, ignoring duplicate click');
+        return;
+    }
+
     const serviceNames = getEnabledRandomServiceIds();
     if (serviceNames.length === 0) {
         toastr.warning('No random sources enabled. Enable at least one in Settings > Random.');
         return;
     }
 
+    isRandomCardLoading = true;
+
     // Disable the random button during loading
-    const randomButtons = menu.querySelectorAll('.bot-browser-random');
+    const randomButtons = document.querySelectorAll('.bot-browser-random, .bot-browser-random-same-btn, .bot-browser-random-any-btn');
     randomButtons.forEach(btn => btn.disabled = true);
 
     try {
-        // Select service - either same as before or random
-        let selectedService;
-        if (preferSameService && serviceNames.includes(preferSameService)) {
-            selectedService = preferSameService;
-        } else {
-            selectedService = serviceNames[Math.floor(Math.random() * serviceNames.length)];
+        const firstChoice = preferSameService && serviceNames.includes(preferSameService)
+            ? preferSameService
+            : null;
+        const fallbackServices = shuffleRandomServices(serviceNames.filter(service => service !== firstChoice));
+        const servicesToTry = firstChoice ? [firstChoice, ...fallbackServices] : fallbackServices;
+        const emptyServices = [];
+
+        for (const selectedService of servicesToTry) {
+            try {
+                const cards = await withTimeout(
+                    loadRandomCardsForService(selectedService),
+                    RANDOM_SOURCE_TIMEOUT_MS,
+                    `Random source ${selectedService}`,
+                );
+                const randomCard = await getRandomCard(selectedService, cards, loadServiceIndex, { silentNoCards: true });
+
+                if (randomCard) {
+                    currentRandomService = selectedService;
+                    await showCardDetailWrapper(randomCard, true, true); // save=true, isRandom=true
+                    return;
+                }
+
+                emptyServices.push(selectedService);
+                console.warn(`[Bot Browser] Random source had no usable cards, rerolling: ${selectedService}`);
+            } catch (error) {
+                emptyServices.push(selectedService);
+                console.warn(`[Bot Browser] Random source failed, rerolling: ${selectedService}`, error);
+            }
         }
 
-        // Store for "same source" button
-        currentRandomService = selectedService;
-
-        // Load a random card from the selected service
-        let cards;
-        const useLiveChubApi = extension_settings[extensionName].useChubLiveApi !== false;
-        const useRisuRealmLiveApi = extension_settings[extensionName].useRisuRealmLiveApi !== false;
-
-        // Special handling for live APIs - use random pages for true randomness
-        if (selectedService === 'jannyai') {
-            const searchResults = await searchJannyCharacters({
-                search: '',
-                page: Math.floor(Math.random() * 10) + 1, // Random page 1-10
-                limit: 40,
-                sort: 'createdAtStamp:desc'
-            });
-            const results = searchResults.results?.[0] || {};
-            cards = (results.hits || []).map(hit => transformJannyCard(hit));
-        } else if (selectedService === 'chub' && useLiveChubApi) {
-            // Chub live API - use random page for variety
-            const randomPage = Math.floor(Math.random() * 50) + 1; // Random page 1-50
-            const result = await searchChubCards({
-                search: '',
-                limit: 48,
-                page: randomPage,
-                sort: 'random', // Chub supports random sort
-                nsfw: !extension_settings[extensionName].hideNsfw
-            });
-            const nodes = result?.data?.nodes || result?.nodes || [];
-            cards = nodes.map(node => ({
-                ...transformChubCard(node),
-                sourceService: 'chub',
-                isLiveChub: true
-            }));
-        } else if (selectedService === 'risuai_realm' && useRisuRealmLiveApi) {
-            // RisuRealm live API - use random page for variety
-            const randomPage = Math.floor(Math.random() * 20) + 1; // Random page 1-20
-            const result = await searchRisuRealm({
-                search: '',
-                page: randomPage,
-                sort: 'download', // Mix it up with download sort
-                nsfw: !extension_settings[extensionName].hideNsfw
-            });
-            cards = result.cards.map(card => ({
-                ...transformRisuRealmCard(card),
-                sourceService: 'risuai_realm',
-                isLiveApi: true
-            }));
-        } else if (selectedService === 'pygmalion') {
-            // Pygmalion live API - use random page for variety
-            const randomPage = Math.floor(Math.random() * 20) + 1; // Random page 1-20
-            const result = await searchPygmalionCharacters({
-                query: '',
-                page: randomPage,
-                pageSize: 60,
-                includeSensitive: !extension_settings[extensionName].hideNsfw
-            });
-            cards = result.characters.map(char => ({
-                ...transformPygmalionCard(char),
-                sourceService: 'pygmalion',
-                isLiveApi: true
-            }));
-        } else if (selectedService === 'backyard') {
-            // Backyard live API
-            const result = await searchBackyardCharacters({
-                search: '',
-                sortBy: BACKYARD_SORT_TYPES.POPULAR,
-                type: extension_settings[extensionName].hideNsfw ? 'sfw' : 'all'
-            });
-            cards = result.characters.map(char => ({
-                ...transformBackyardCard(char),
-                sourceService: 'backyard',
-                isLiveApi: true
-            }));
-        } else if (selectedService === 'character_tavern') {
-            // Character Tavern live API - use random page for variety
-            const randomPage = Math.floor(Math.random() * 10) + 1; // Random page 1-10
-            cards = await searchCharacterTavern({
-                query: '',
-                page: randomPage,
-                limit: 30
-            });
-        } else if (selectedService === 'wyvern') {
-            // Wyvern live API - use random page for variety
-            const randomPage = Math.floor(Math.random() * 10) + 1; // Random page 1-10
-            const result = await searchWyvernCharacters({
-                search: '',
-                page: randomPage,
-                limit: 20,
-                sort: 'votes',
-                hideNsfw: extension_settings[extensionName].hideNsfw
-            });
-            cards = (result.characters || []).map(char => ({
-                ...transformWyvernCard(char),
-                sourceService: 'wyvern',
-                isLiveApi: true
-            }));
-        } else {
-            cards = await loadServiceIndex(selectedService);
-        }
-
-        const randomCard = await getRandomCard(selectedService, cards, loadServiceIndex);
-
-        if (randomCard) {
-            await showCardDetailWrapper(randomCard, true, true); // save=true, isRandom=true
-        } else {
-            toastr.warning('No cards available from this service');
-        }
+        console.warn(`[Bot Browser] Random card exhausted ${emptyServices.length} source(s): ${emptyServices.join(', ')}`);
+        toastr.warning('No cards available from enabled random sources');
     } catch (error) {
         console.error('[Bot Browser] Error loading random card:', error);
         toastr.error('Failed to load random card');
+    } finally {
+        isRandomCardLoading = false;
+        document.querySelectorAll('.bot-browser-random, .bot-browser-random-same-btn, .bot-browser-random-any-btn')
+            .forEach(btn => { btn.disabled = false; });
     }
-
-    // Re-enable buttons
-    randomButtons.forEach(btn => btn.disabled = false);
 }
 
 // Get random card from any service (for "any source" button)

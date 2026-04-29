@@ -4318,6 +4318,173 @@ body #bot-browser-settings-modal,
     transform: translateY(0);
 }
 
+/* Local Library Editors */
+.bot-browser-local-editor-modal {
+    width: min(980px, calc(100vw - 36px));
+    height: min(860px, calc(100vh - 36px));
+    display: flex;
+    flex-direction: column;
+}
+
+.bot-browser-local-editor-body {
+    flex: 1;
+    overflow: auto;
+    padding: 18px;
+}
+
+.bot-browser-local-editor-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+
+.bot-browser-local-editor-full {
+    grid-column: 1 / -1;
+}
+
+.bot-browser-local-editor-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    color: rgba(255, 255, 255, 0.86);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.bot-browser-local-editor-field input,
+.bot-browser-local-editor-field textarea,
+.bot-browser-local-entry-comment {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 8px;
+    background: rgba(12, 14, 20, 0.72);
+    color: rgba(255, 255, 255, 0.92);
+    padding: 10px 12px;
+    font: inherit;
+    font-weight: 400;
+    resize: vertical;
+}
+
+.bot-browser-local-editor-field textarea {
+    min-height: 86px;
+}
+
+.bot-browser-local-editor-field input:focus,
+.bot-browser-local-editor-field textarea:focus,
+.bot-browser-local-entry-comment:focus {
+    outline: none;
+    border-color: rgba(88, 166, 255, 0.75);
+    box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.16);
+}
+
+.bot-browser-local-editor-footer,
+.bot-browser-local-lorebook-toolbar,
+.bot-browser-local-entry-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.bot-browser-local-editor-footer {
+    justify-content: flex-end;
+    padding: 14px 18px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.bot-browser-local-editor-close {
+    width: 36px;
+    height: 36px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.78);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.bot-browser-local-editor-close:hover {
+    background: rgba(255, 80, 80, 0.18);
+    border-color: rgba(255, 80, 80, 0.35);
+    color: rgba(255, 255, 255, 0.95);
+}
+
+.bot-browser-local-editor-footer button,
+.bot-browser-local-lorebook-toolbar button,
+.bot-browser-local-entry-delete,
+.bot-browser-local-edit-btn,
+.bot-browser-open-world-info-btn {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.9);
+    padding: 9px 12px;
+    cursor: pointer;
+}
+
+.bot-browser-local-editor-row {
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.bot-browser-local-edit-btn,
+.bot-browser-open-world-info-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 0.9em;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.bot-browser-local-editor-save {
+    background: rgba(46, 160, 67, 0.28) !important;
+}
+
+.bot-browser-local-lorebook-toolbar {
+    justify-content: flex-end;
+    margin-bottom: 14px;
+}
+
+.bot-browser-local-entry {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px;
+    margin-bottom: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.045);
+}
+
+.bot-browser-local-entry-header {
+    align-items: center;
+}
+
+.bot-browser-local-entry-header label {
+    white-space: nowrap;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.bot-browser-local-entry-delete {
+    color: #ff8f8f;
+}
+
+@media (max-width: 760px) {
+    .bot-browser-local-editor-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .bot-browser-local-entry-header {
+        flex-wrap: wrap;
+    }
+}
+
 /* Mobile adjustments for new settings modal */
 @media (max-width: 600px) {
     .bb-settings-backdrop {

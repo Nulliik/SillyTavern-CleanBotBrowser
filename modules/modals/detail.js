@@ -17,6 +17,7 @@ import { transformFullJoylandBot } from '../services/joylandApi.js';
 import { transformFullSpicychatCharacter } from '../services/spicychatApi.js';
 import { getTalkieCharacter, transformFullTalkieCharacter } from '../services/talkieApi.js';
 import { buildProxyUrl, PROXY_TYPES, proxiedFetch } from '../services/corsProxy.js';
+import { showLocalCharacterEditor, showLocalLorebookEditor } from './localEditors.js';
 import { getSourceUrl } from '../utils/utils.js';
 import {
     isChubLoggedIn, getChubFavoriteIds, getChubFollowsList,
@@ -444,6 +445,7 @@ function createDetailModal(fullCard, isRandom = false) {
 
     // Check if this is an imported card from "My Imports"
     const isImported = fullCard.service === 'my_imports' || fullCard.isLocal === true;
+    const isLocalContent = fullCard.isLocal === true || fullCard.service === 'my_characters' || fullCard.service === 'my_lorebooks';
 
     // Check if this character exists in SillyTavern
     const stCharacter = findCharacterByName(fullCard.name);
@@ -508,7 +510,8 @@ function createDetailModal(fullCard, isRandom = false) {
         isImported,
         characterExistsInST,
         sourceUrlData,
-        chubFeatures
+        chubFeatures,
+        isLocalContent
     );
 
     return { detailOverlay, detailModal };
@@ -725,6 +728,65 @@ function setupDetailModalEvents(detailModal, detailOverlay, fullCard, state) {
                     // Still reset pointer events on error
                     document.body.style.pointerEvents = '';
                 }
+            }
+        });
+    }
+
+    const openWorldInfoBtn = detailModal.querySelector('.bot-browser-open-world-info-btn');
+    if (openWorldInfoBtn) {
+        openWorldInfoBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+
+            const lorebookName = fullCard.localLorebookName || fullCard.name;
+            try {
+                const elementsToRemove = [
+                    'bot-browser-detail-modal',
+                    'bot-browser-detail-overlay',
+                    'bot-browser-menu',
+                    'bot-browser-overlay',
+                    'bot-browser-settings-modal',
+                    'bot-browser-settings-overlay',
+                    'bot-browser-image-lightbox'
+                ];
+
+                elementsToRemove.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.remove();
+                });
+                document.body.style.pointerEvents = '';
+                isOpeningModal = false;
+
+                const worldEditorSelect = document.getElementById('world_editor_select');
+                if (worldEditorSelect && lorebookName) {
+                    const option = Array.from(worldEditorSelect.options).find(opt => opt.text === lorebookName);
+                    if (option) {
+                        worldEditorSelect.value = option.value;
+                        worldEditorSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                }
+
+                document.getElementById('WorldInfo')?.click();
+                document.getElementById('world_info_button')?.click();
+                console.log('[Bot Browser] Opened World Info editor for:', lorebookName);
+            } catch (error) {
+                console.error('[Bot Browser] Failed to open World Info editor:', error);
+                toastr.error('Failed to open World Info editor', 'Error');
+                document.body.style.pointerEvents = '';
+            }
+        });
+    }
+
+    const localEditBtn = detailModal.querySelector('.bot-browser-local-edit-btn');
+    if (localEditBtn) {
+        localEditBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+
+            if (fullCard.isLorebook || fullCard.isLocalLorebook || fullCard.service === 'my_lorebooks') {
+                showLocalLorebookEditor(fullCard);
+            } else {
+                showLocalCharacterEditor(fullCard);
             }
         });
     }

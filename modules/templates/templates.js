@@ -131,6 +131,12 @@ export function getOriginalMenuHTML(recentlyViewed) {
                     </div>
                     <span>My Imports</span>
                 </button>
+                <button class="bot-browser-source" data-source="my_characters">
+                    <div class="bot-browser-source-icon" style="background: linear-gradient(135deg, rgba(70, 140, 220, 0.35), rgba(40, 180, 150, 0.28)); display: flex; align-items: center; justify-content: center; font-size: 26px; color: rgba(255, 255, 255, 0.9);">
+                        <i class="fa-solid fa-user-pen"></i>
+                    </div>
+                    <span>My Characters</span>
+                </button>
                 <!-- Live API Sources (sorted by size - largest first) -->
                 <button class="bot-browser-source" data-source="chub">
                     <div class="bot-browser-source-icon" style="background-image: url('https://avatars.charhub.io/icons/assets/full_logo.png'); background-size: cover; background-position: center; background-repeat: no-repeat; background-color: white;"></div>
@@ -230,6 +236,12 @@ export function getOriginalMenuHTML(recentlyViewed) {
 
         <div class="bot-browser-tab-content" data-content="lorebooks">
             <div class="bot-browser-grid">
+                <button class="bot-browser-source" data-source="my_lorebooks">
+                    <div class="bot-browser-source-icon" style="background: linear-gradient(135deg, rgba(70, 140, 220, 0.35), rgba(40, 180, 150, 0.28)); display: flex; align-items: center; justify-content: center; font-size: 26px; color: rgba(255, 255, 255, 0.9);">
+                        <i class="fa-solid fa-book-open"></i>
+                    </div>
+                    <span>Your Lorebooks</span>
+                </button>
                 <button class="bot-browser-source" data-source="chub_lorebooks">
                     <div class="bot-browser-source-icon" style="background-image: url('https://avatars.charhub.io/icons/assets/full_logo.png'); background-size: cover; background-position: center; background-repeat: no-repeat; background-color: white;"></div>
                     <span>Chub</span>

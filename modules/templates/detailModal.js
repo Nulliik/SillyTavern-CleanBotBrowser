@@ -25,7 +25,7 @@ function formatStatRating(value) {
     return number.toFixed(1);
 }
 
-export function buildDetailModalHTML(cardName, imageUrl, isLorebook, cardCreator, tags, creator, websiteDesc, description, descPreview, personality, scenario, firstMessage, alternateGreetings, exampleMsg, entries, entriesCount, metadata, isBookmarked = false, isRandom = false, isImported = false, characterExistsInST = false, sourceUrlData = null, chubFeatures = null) {
+export function buildDetailModalHTML(cardName, imageUrl, isLorebook, cardCreator, tags, creator, websiteDesc, description, descPreview, personality, scenario, firstMessage, alternateGreetings, exampleMsg, entries, entriesCount, metadata, isBookmarked = false, isRandom = false, isImported = false, characterExistsInST = false, sourceUrlData = null, chubFeatures = null, isLocalContent = false) {
     const safeImageUrl = sanitizeImageUrl(imageUrl);
     const safeSourceUrl = sourceUrlData ? sanitizeHttpUrl(sourceUrlData.url) : '';
     const safeSourceServiceName = sourceUrlData ? escapeHTML(sourceUrlData.serviceName || 'website') : '';
@@ -43,11 +43,32 @@ export function buildDetailModalHTML(cardName, imageUrl, isLorebook, cardCreator
 
     // Open in SillyTavern button (only for imported cards that exist in ST)
     const openInSTButtonHTML = (isImported && characterExistsInST) ? `
-                <div class="bot-browser-detail-actions-row bot-browser-open-st-row">
                     <button class="bot-browser-open-in-st-btn" title="Open a chat with this character in SillyTavern">
                         <i class="fa-solid fa-comments"></i> <span>Open Chat in SillyTavern</span>
-                    </button>
-                </div>` : '';
+                    </button>` : '';
+
+    const openWorldInfoButtonHTML = (isLocalContent && isLorebook) ? `
+                    <button class="bot-browser-open-world-info-btn" title="Open this lorebook in SillyTavern's World Info editor">
+                        <i class="fa-solid fa-book-open"></i> <span>Open World Info Editor</span>
+                    </button>` : '';
+
+    const localEditorButtonHTML = isLocalContent ? `
+                    <button class="bot-browser-local-edit-btn" title="${isLorebook ? 'Inspect and edit lorebook entries' : 'Inspect and edit character fields'}">
+                        <i class="fa-solid ${isLorebook ? 'fa-list-check' : 'fa-pen-to-square'}"></i>
+                        <span>${isLorebook ? 'Edit Entries' : 'Edit Character'}</span>
+                    </button>` : '';
+
+    const localActionsHTML = (localEditorButtonHTML || openInSTButtonHTML || openWorldInfoButtonHTML) ? `
+                    <div class="bot-browser-detail-actions-row bot-browser-local-editor-row">
+                        ${localEditorButtonHTML}
+                        ${openInSTButtonHTML}
+                        ${openWorldInfoButtonHTML}
+                    </div>` : '';
+
+    const importButtonHTML = isLocalContent ? '' : `
+                        <button class="bot-browser-import-button">
+                            <i class="fa-solid fa-download"></i> <span>Import</span>
+                        </button>`;
 
     // View on Website button (only for live API sources)
     const viewOnWebsiteHTML = safeSourceUrl ? `
@@ -70,9 +91,7 @@ export function buildDetailModalHTML(cardName, imageUrl, isLorebook, cardCreator
             <div class="bot-browser-detail-scroll-container">
                 <div class="bot-browser-detail-actions-container">
                     <div class="bot-browser-detail-actions-row">
-                        <button class="bot-browser-import-button">
-                            <i class="fa-solid fa-download"></i> <span>Import</span>
-                        </button>
+                        ${importButtonHTML}
                         <button class="bot-browser-bookmark-btn ${isBookmarked ? 'bookmarked' : ''}">
                             <i class="fa-${isBookmarked ? 'solid' : 'regular'} fa-bookmark"></i>
                             <span>${isBookmarked ? 'Saved' : 'Save'}</span>
@@ -88,7 +107,7 @@ export function buildDetailModalHTML(cardName, imageUrl, isLorebook, cardCreator
                         </button>
                     </div>
                     ${randomButtonsHTML}
-                    ${openInSTButtonHTML}
+                    ${localActionsHTML}
                 </div>
 
                 <div class="bot-browser-detail-image ${safeImageUrl ? 'clickable-image' : ''}" style="background-image: url('${safeImageUrl}');" ${safeImageUrl ? `data-image-url="${safeImageUrl}" title="Click to enlarge"` : ''}>

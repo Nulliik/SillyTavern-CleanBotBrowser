@@ -5,7 +5,6 @@
 
 import { proxiedFetch } from './corsProxy.js';
 
-//const TYPESENSE_BASE = 'https://etmzpxgvnid370fyp.a1.typesense.net'; #TODO: To be removed
 const COLLECTION = 'public_characters_alias';
 const IMAGE_CDN = 'https://cdn.nd-api.com';
 const API_BASE = 'https://prod.nd-api.com';
@@ -47,6 +46,19 @@ function getSpicychatTypesenseKey() {
     return '';
 }
 
+function getSpicychatTypesenseBase() {
+    try {
+        const injected = typeof window !== 'undefined'
+            ? String(window.__BOT_BROWSER_SPICYCHAT_TYPESENSE_BASE || '').trim()
+            : '';
+        if (injected) return injected.replace(/\/+$/, '');
+    } catch {
+        // Ignore inaccessible globals.
+    }
+
+    return '';
+}
+
 /**
  * Search SpicyChat characters via Typesense
  */
@@ -74,12 +86,13 @@ export async function searchSpicychat(options = {}) {
     if (extraFilter) filters.push(extraFilter);
     if (filters.length) params.set('filter_by', filters.join('&&'));
 
-    const url = `${TYPESENSE_BASE}/collections/${COLLECTION}/documents/search?${params.toString()}`;
-
+    const typesenseBase = getSpicychatTypesenseBase();
     const typesenseKey = getSpicychatTypesenseKey();
-    if (!typesenseKey) {
-        throw new Error('SpicyChat search requires a Typesense search key. This cleaned build does not ship hardcoded search keys.');
+    if (!typesenseBase || !typesenseKey) {
+        throw new Error('SpicyChat search requires an injected Typesense endpoint and search key. This cleaned build does not ship hardcoded Typesense hosts or keys.');
     }
+
+    const url = `${typesenseBase}/collections/${COLLECTION}/documents/search?${params.toString()}`;
 
     const response = await proxiedFetch(url, {
         service: 'spicychat',
