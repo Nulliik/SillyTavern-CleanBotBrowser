@@ -22,6 +22,7 @@ import { searchBackyardCharacters, transformBackyardCard, backyardApiState, rese
 import { pygmalionApiState, resetPygmalionApiState, loadMorePygmalionCharacters } from './services/pygmalionApi.js';
 import { searchSakuraCharacters, transformSakuraCard, sakuraApiState, resetSakuraState } from './services/sakuraApi.js';
 import { searchSaucepanCompanions, transformSaucepanCard, saucepanApiState, resetSaucepanState } from './services/saucepanApi.js';
+import { searchBotbooruPosts, transformBotbooruCard, botbooruApiState, resetBotbooruState } from './services/botbooruApi.js';
 import { browseCrushonCharacters, searchCrushonCharacters, transformCrushonCard, crushonApiState, resetCrushonState } from './services/crushonApi.js';
 import { searchHarpyCharacters, transformHarpyCard, harpyApiState, resetHarpyState } from './services/harpyApi.js';
 import { searchBotify, transformBotifyCard, botifyApiState, resetBotifyState, BOTIFY_SORT_OPTIONS } from './services/botifyApi.js';
@@ -173,6 +174,8 @@ export async function createCardBrowser(serviceName, cards, state, extensionName
     if (state.isSakura && serviceName === 'sakura') resetSakuraState();
 
     state.isSaucepan = serviceName === 'saucepan' || cards.some(c => c.isSaucepan || c.service === 'saucepan');
+
+    state.isBotbooru = serviceName === 'botbooru' || cards.some(c => c.isBotbooru || c.service === 'botbooru');
 
     state.isCrushon = serviceName === 'crushon' || cards.some(c => c.isCrushon || c.service === 'crushon');
     if (state.isCrushon && serviceName === 'crushon') resetCrushonState();
@@ -398,7 +401,9 @@ export async function createCardBrowser(serviceName, cards, state, extensionName
                             ? `Browsing Wyvern Chat${nsfwText}`
                             : state.isSaucepan
                                 ? `Browsing Saucepan.ai - page ${saucepanApiState.page || 1}${saucepanApiState.total ? ` of ${Math.ceil(saucepanApiState.total / (saucepanApiState.limit || 24))} (${Number(saucepanApiState.total).toLocaleString()} total)` : ''}${nsfwText}`
-                                : `${cardsWithImages.length} card${cardsWithImages.length !== 1 ? 's' : ''} found${nsfwText}`;
+                                : state.isBotbooru
+                                    ? `Browsing BotBooru - page ${botbooruApiState.page || 1}${botbooruApiState.total ? ` of ${Math.ceil(botbooruApiState.total / (botbooruApiState.limit || 24))} (${Number(botbooruApiState.total).toLocaleString()} total)` : ''}${nsfwText}`
+                                    : `${cardsWithImages.length} card${cardsWithImages.length !== 1 ? 's' : ''} found${nsfwText}`;
     menuContent.innerHTML = createBrowserHeader(serviceDisplayName, state.filters.search, cardCountText, searchCollapsed, hideNsfw, state.isLiveChub, state.advancedFilters, state.isJannyAI, state.jannyAdvancedFilters, state.isCharacterTavern, state.ctAdvancedFilters, state.isWyvern, state.wyvernAdvancedFilters, state.isRisuRealm);
 
     // Add bulk action bar to the grid wrapper
@@ -883,6 +888,49 @@ function setupBrowserEventListeners(menuContent, state, extensionName, extension
             } catch (error) {
                 console.error('[CleanBotBrowser] Wyvern search failed:', error);
             }
+        } else if (state.isBotbooru) {
+            console.log('[CleanBotBrowser] Triggering BotBooru search:', state.filters.search);
+            try {
+                resetBotbooruState();
+
+                let botbooruSort = botbooruApiState.lastSort || 'latest';
+                switch (state.sortBy) {
+                    case 'date_desc': botbooruSort = 'latest'; break;
+                    case 'tokens_desc':
+                    case 'tokens_asc': botbooruSort = 'downloads'; break;
+                    default: botbooruSort = 'downloads';
+                }
+
+                const result = await searchBotbooruPosts({
+                    search: state.filters.search,
+                    sort: botbooruSort,
+                    offset: 0,
+                    limit: 24,
+                    sfwOnly: extension_settings[extensionName].hideNsfw !== false
+                });
+
+                const cards = result.posts.map(transformBotbooruCard);
+                botbooruApiState.page = 1;
+                botbooruApiState.offset = cards.length;
+                botbooruApiState.limit = 24;
+                botbooruApiState.hasMore = result.hasMore;
+                botbooruApiState.total = result.total;
+                botbooruApiState.lastSearch = state.filters.search;
+                botbooruApiState.lastSort = botbooruSort;
+
+                state.currentCards = cards;
+                state.fuse = null;
+                const filteredCards = applyClientSideFilters(cards, state, extensionName, extension_settings);
+                state.filteredCards = sortCards(filteredCards, state.sortBy);
+                state.currentPage = 1;
+                state.totalPages = 1;
+
+                updateCachedFiltersAndDropdowns(state, menuContent);
+                renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
+                updateBotbooruCount(menuContent, extensionName, extension_settings);
+            } catch (error) {
+                console.error('[CleanBotBrowser] BotBooru search failed:', error);
+            }
         } else if (state.isAllSources && state.filters.search.trim()) {
             // For All Sources with a search query, query live APIs in parallel with local search
             console.log('[CleanBotBrowser] All Sources search:', state.filters.search);
@@ -1084,6 +1132,45 @@ function setupBrowserEventListeners(menuContent, state, extensionName, extension
                 }
             } catch (error) {
                 console.error('[CleanBotBrowser] Failed to clear filters:', error);
+                toastr.error('Failed to clear filters: ' + error.message);
+            } finally {
+                clearButton.disabled = false;
+                clearButton.innerHTML = '<i class="fa-solid fa-times"></i> Clear Filters';
+            }
+        } else if (state.isBotbooru) {
+            try {
+                clearButton.disabled = true;
+                clearButton.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+
+                resetBotbooruState();
+                const result = await searchBotbooruPosts({
+                    search: '',
+                    sort: 'downloads',
+                    offset: 0,
+                    limit: 24,
+                    sfwOnly: extension_settings[extensionName].hideNsfw !== false
+                });
+
+                const cards = result.posts.map(transformBotbooruCard);
+                botbooruApiState.page = 1;
+                botbooruApiState.offset = cards.length;
+                botbooruApiState.limit = 24;
+                botbooruApiState.hasMore = result.hasMore;
+                botbooruApiState.total = result.total;
+                botbooruApiState.lastSearch = '';
+                botbooruApiState.lastSort = 'downloads';
+
+                state.currentCards = cards;
+                state.fuse = null;
+                state.filteredCards = applyClientSideFilters(cards, state, extensionName, extension_settings);
+                state.currentPage = 1;
+                state.totalPages = 1;
+
+                updateCachedFiltersAndDropdowns(state, menuContent);
+                renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
+                updateBotbooruCount(menuContent, extensionName, extension_settings);
+            } catch (error) {
+                console.error('[CleanBotBrowser] Failed to clear BotBooru filters:', error);
                 toastr.error('Failed to clear filters: ' + error.message);
             } finally {
                 clearButton.disabled = false;
@@ -1819,6 +1906,52 @@ function setupCustomDropdown(container, state, filterType, extensionName, extens
                         console.error('[CleanBotBrowser] Wyvern sort failed:', error);
                     }
                 })();
+            } else if (state.isBotbooru) {
+                console.log('[CleanBotBrowser] Triggering BotBooru sort:', state.sortBy);
+                (async () => {
+                    try {
+                        resetBotbooruState();
+
+                        let botbooruSort = 'downloads';
+                        switch (state.sortBy) {
+                            case 'date_desc': botbooruSort = 'latest'; break;
+                            case 'tokens_desc':
+                            case 'tokens_asc': botbooruSort = 'downloads'; break;
+                            default: botbooruSort = 'downloads';
+                        }
+
+                        const result = await searchBotbooruPosts({
+                            search: state.filters.search,
+                            sort: botbooruSort,
+                            offset: 0,
+                            limit: 24,
+                            sfwOnly: extension_settings[extensionName].hideNsfw !== false
+                        });
+
+                        const cards = result.posts.map(transformBotbooruCard);
+                        botbooruApiState.page = 1;
+                        botbooruApiState.offset = cards.length;
+                        botbooruApiState.limit = 24;
+                        botbooruApiState.hasMore = result.hasMore;
+                        botbooruApiState.total = result.total;
+                        botbooruApiState.lastSearch = state.filters.search;
+                        botbooruApiState.lastSort = botbooruSort;
+
+                        state.currentCards = cards;
+                        state.fuse = null;
+                        const menuContent = document.querySelector('.bot-browser-content');
+                        const filteredCards = applyClientSideFilters(cards, state, extensionName, extension_settings);
+                        state.filteredCards = sortCards(filteredCards, state.sortBy);
+                        state.currentPage = 1;
+                        state.totalPages = 1;
+
+                        updateCachedFiltersAndDropdowns(state, menuContent);
+                        renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
+                        updateBotbooruCount(menuContent, extensionName, extension_settings);
+                    } catch (error) {
+                        console.error('[CleanBotBrowser] BotBooru sort failed:', error);
+                    }
+                })();
             } else {
                 // Standard refresh for non-Chub sources
                 refreshCardGrid(state, extensionName, extension_settings, showCardDetailFunc);
@@ -1908,6 +2041,8 @@ function renderPage(state, menuContent, showCardDetailFunc, extensionName, exten
         paginationHTML = createChubPaginationHTML(1, sakuraApiState.hasMore, false);
     } else if (state.isSaucepan) {
         paginationHTML = createChubPaginationHTML(saucepanApiState.page || 1, saucepanApiState.hasMore, false);
+    } else if (state.isBotbooru) {
+        paginationHTML = createChubPaginationHTML(botbooruApiState.page || 1, botbooruApiState.hasMore, false);
     } else if (state.isCrushon) {
         paginationHTML = createChubPaginationHTML(1, crushonApiState.hasMore, false);
     } else if (state.isHarpy) {
@@ -1984,6 +2119,8 @@ function renderPage(state, menuContent, showCardDetailFunc, extensionName, exten
         setupSakuraPaginationListeners(gridContainer, state, menuContent, showCardDetailFunc, extensionName, extension_settings);
     } else if (state.isSaucepan) {
         setupSaucepanPaginationListeners(gridContainer, state, menuContent, showCardDetailFunc, extensionName, extension_settings);
+    } else if (state.isBotbooru) {
+        setupBotbooruPaginationListeners(gridContainer, state, menuContent, showCardDetailFunc, extensionName, extension_settings);
     } else if (state.isCrushon) {
         setupCrushonPaginationListeners(gridContainer, state, menuContent, showCardDetailFunc, extensionName, extension_settings);
     } else if (state.isHarpy) {
@@ -2799,6 +2936,79 @@ function updateSaucepanCount(menuContent, extensionName, extension_settings) {
     countContainer.textContent = totalPages
         ? `Browsing Saucepan.ai - page ${page} of ${totalPages} (${total.toLocaleString()} total)${nsfwText}`
         : `Browsing Saucepan.ai - page ${page}${nsfwText}`;
+}
+
+function setupBotbooruPaginationListeners(gridContainer, state, menuContent, showCardDetailFunc, extensionName, extension_settings) {
+    const pagination = gridContainer.querySelector('.bot-browser-pagination');
+    if (!pagination) return;
+
+    pagination.querySelectorAll('.bot-browser-pagination-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const action = btn.dataset.action;
+            const currentPage = botbooruApiState.page || 1;
+            const limit = botbooruApiState.limit || 24;
+            let targetPage = currentPage;
+
+            if (action === 'next' && botbooruApiState.hasMore) {
+                targetPage = currentPage + 1;
+            } else if (action === 'prev' && currentPage > 1) {
+                targetPage = currentPage - 1;
+            } else {
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
+
+            try {
+                const targetOffset = (targetPage - 1) * limit;
+                const result = await searchBotbooruPosts({
+                    search: botbooruApiState.lastSearch,
+                    sort: botbooruApiState.lastSort,
+                    offset: targetOffset,
+                    limit,
+                    sfwOnly: extension_settings[extensionName].hideNsfw !== false
+                });
+
+                const cards = result.posts.map(transformBotbooruCard);
+                botbooruApiState.page = targetPage;
+                botbooruApiState.offset = targetOffset + cards.length;
+                botbooruApiState.hasMore = result.hasMore;
+                botbooruApiState.total = result.total;
+
+                state.currentCards = cards;
+                state.filteredCards = applyClientSideFilters(state.currentCards, state, extensionName, extension_settings);
+                state.totalPages = 1;
+                state.currentPage = 1;
+
+                renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
+                updateBotbooruCount(menuContent, extensionName, extension_settings);
+                console.log(`[CleanBotBrowser] Loaded BotBooru page ${targetPage} (${cards.length} cards, ${botbooruApiState.offset}/${botbooruApiState.total || 'unknown'})`);
+            } catch (error) {
+                console.error('[CleanBotBrowser] Failed to load BotBooru cards:', error);
+                toastr.error('Failed to load more cards');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = action === 'next'
+                    ? 'Next <i class="fa-solid fa-angle-right"></i>'
+                    : '<i class="fa-solid fa-angle-left"></i> Previous';
+            }
+        });
+    });
+}
+
+function updateBotbooruCount(menuContent, extensionName, extension_settings) {
+    const countContainer = menuContent?.querySelector('.bot-browser-results-count');
+    if (!countContainer) return;
+    const hideNsfw = extension_settings[extensionName].hideNsfw || false;
+    const nsfwText = hideNsfw ? ' (after hiding NSFW)' : '';
+    const total = Number(botbooruApiState.total || 0);
+    const page = botbooruApiState.page || 1;
+    const limit = botbooruApiState.limit || 24;
+    const totalPages = total > 0 ? Math.ceil(total / limit) : null;
+    countContainer.textContent = totalPages
+        ? `Browsing BotBooru - page ${page} of ${totalPages} (${total.toLocaleString()} total)${nsfwText}`
+        : `Browsing BotBooru - page ${page}${nsfwText}`;
 }
 
 function setupCrushonPaginationListeners(gridContainer, state, menuContent, showCardDetailFunc, extensionName, extension_settings) {

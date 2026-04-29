@@ -152,6 +152,9 @@ const SERVICE_PROXY_MAP = {
     // Saucepan.ai
     saucepan: PLUGIN_FIRST_PROXY_CHAIN,
 
+    // BotBooru - public gallery JSON and PNG downloads; keep local/ST fallbacks for CORS-restricted browsers.
+    botbooru: DIRECT_FIRST_PROXY_CHAIN,
+
     // CrushOn.ai - Cloudflare + tRPC
     crushon: PLUGIN_FIRST_PROXY_CHAIN,
 

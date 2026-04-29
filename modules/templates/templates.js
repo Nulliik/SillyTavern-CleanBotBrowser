@@ -224,6 +224,10 @@ export function getOriginalMenuHTML(recentlyViewed) {
                     <div class="bot-browser-source-icon" style="background-image: url('https://saucepan.ai/favicon-32x32.png'); background-size: cover; background-position: center; background-repeat: no-repeat;"></div>
                     <span>Saucepan.ai</span>
                 </button>
+                <button class="bot-browser-source" data-source="botbooru">
+                    <div class="bot-browser-source-icon" style="background-image: url('https://botbooru.com/favicon.ico?v=2'); background-size: cover; background-position: center; background-repeat: no-repeat; background-color: #111827;"></div>
+                    <span>BotBooru</span>
+                </button>
                 <!-- Archive Sources (sorted by size - largest first) -->
                 <button class="bot-browser-source" data-source="catbox">
                     <div class="bot-browser-source-icon" style="background-image: url('https://catbox.tech/favicon128.png'); background-size: cover; background-position: center; background-repeat: no-repeat;"></div>

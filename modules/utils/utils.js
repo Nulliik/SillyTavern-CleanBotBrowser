@@ -253,6 +253,16 @@ export function getSourceUrl(card) {
         }
     }
 
+    // BotBooru
+    if (card.isBotbooru || service === 'botbooru' || service.includes('botbooru')) {
+        if (card.url) {
+            return { url: card.url, serviceName: 'BotBooru' };
+        }
+        if (card.id) {
+            return { url: `https://botbooru.com/character/${encodeURIComponent(card.id)}`, serviceName: 'BotBooru' };
+        }
+    }
+
     // Wyvern
     if (card.isWyvern || service === 'wyvern' || service.includes('wyvern')) {
         // Wyvern uses _id for the character ID

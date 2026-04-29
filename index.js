@@ -53,6 +53,10 @@ import {
     getSaucepanUserCompanions
 } from './modules/services/saucepanApi.js';
 import {
+    searchBotbooruPosts, transformBotbooruCard, botbooruApiState, resetBotbooruState,
+    BOTBOORU_SORT_OPTIONS
+} from './modules/services/botbooruApi.js';
+import {
     browseCrushonCharacters, searchCrushonCharacters, transformCrushonCard,
     crushonApiState, resetCrushonState, getCrushonUserCharacters
 } from './modules/services/crushonApi.js';
@@ -115,6 +119,13 @@ const randomServiceOptions = [
         name: 'Risuai Realm',
         iconUrl: 'https://files.catbox.moe/216rab.webp',
         iconSize: 'cover',
+    },
+    {
+        id: 'botbooru',
+        name: 'BotBooru',
+        iconUrl: 'https://botbooru.com/favicon.ico?v=2',
+        iconSize: 'cover',
+        iconBg: '#111827',
     },
     {
         id: 'webring',
@@ -1735,6 +1746,36 @@ function setupSourceButtons(menu) {
                     saucepanApiState.lastSort = spSort;
 
                     console.log(`[CleanBotBrowser] Loaded ${cards.length} Saucepan.ai cards (${result.total} total), hasMore: ${result.hasMore}`);
+                } else if (sourceName === 'botbooru') {
+                    toastr.info('Loading BotBooru...', '', { timeOut: 2000 });
+                    resetBotbooruState();
+
+                    const persistedSearch = extension_settings[extensionName].autoClearFilters !== false ? null : loadPersistentSearch(extensionName, extension_settings, sourceName);
+                    const sortBy = persistedSearch?.sortBy || extension_settings[extensionName].defaultSortBy || 'relevance';
+                    const botbooruSort = sortBy === 'date_desc'
+                        ? BOTBOORU_SORT_OPTIONS.LATEST
+                        : sortBy === 'name_asc' || sortBy === 'name_desc'
+                            ? BOTBOORU_SORT_OPTIONS.LATEST
+                            : BOTBOORU_SORT_OPTIONS.DOWNLOADS;
+
+                    const result = await searchBotbooruPosts({
+                        search: persistedSearch?.filters?.search || '',
+                        sort: botbooruSort,
+                        offset: 0,
+                        limit: 24,
+                        sfwOnly: extension_settings[extensionName].hideNsfw !== false
+                    });
+
+                    cards = result.posts.map(transformBotbooruCard);
+                    botbooruApiState.offset = result.posts.length;
+                    botbooruApiState.hasMore = result.hasMore;
+                    botbooruApiState.total = result.total;
+                    botbooruApiState.limit = 24;
+                    botbooruApiState.page = 1;
+                    botbooruApiState.lastSearch = persistedSearch?.filters?.search || '';
+                    botbooruApiState.lastSort = botbooruSort;
+
+                    console.log(`[CleanBotBrowser] Loaded ${cards.length} BotBooru cards (${result.total} total), hasMore: ${result.hasMore}`);
                 } else if (sourceName === 'crushon') {
                     toastr.info('Loading CrushOn.AI...', '', { timeOut: 2000 });
                     resetCrushonState();
@@ -2054,6 +2095,21 @@ async function loadRandomCardsForService(selectedService) {
         return result.cards.map(card => ({
             ...transformRisuRealmCard(card),
             sourceService: 'risuai_realm',
+            isLiveApi: true
+        }));
+    }
+
+    if (selectedService === 'botbooru') {
+        const result = await searchBotbooruPosts({
+            search: '',
+            sort: BOTBOORU_SORT_OPTIONS.RANDOM,
+            offset: 0,
+            limit: 40,
+            sfwOnly: extension_settings[extensionName].hideNsfw !== false
+        });
+        return result.posts.map(post => ({
+            ...transformBotbooruCard(post),
+            sourceService: 'botbooru',
             isLiveApi: true
         }));
     }

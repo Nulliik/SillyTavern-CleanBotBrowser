@@ -10,6 +10,7 @@ import { buildProxyUrl, PROXY_TYPES, proxiedFetch } from '../services/corsProxy.
 import { getPygmalionCharacter, transformFullPygmalionCharacter } from '../services/pygmalionApi.js';
 import { getSakuraCharacter, transformFullSakuraCharacter } from '../services/sakuraApi.js';
 import { getSaucepanCompanion, transformFullSaucepanCompanion } from '../services/saucepanApi.js';
+import { getBotbooruPost, transformFullBotbooruPost } from '../services/botbooruApi.js';
 import { getCrushonCharacter, transformFullCrushonCharacter } from '../services/crushonApi.js';
 import { getHarpyCharacter, transformFullHarpyCharacter } from '../services/harpyApi.js';
 import { getBotifyBot, transformFullBotifyBot } from '../services/botifyApi.js';
@@ -449,6 +450,12 @@ async function importCharacter(card, extensionName, extension_settings, importSt
     if (card.isSaucepan || card.service === 'saucepan' || card.sourceService === 'saucepan') {
         console.log('[CleanBotBrowser] Importing Saucepan.ai card:', card.name);
         return await importApiCard(card, extensionName, extension_settings, importStats, 'saucepan', getSaucepanCompanion, transformFullSaucepanCompanion);
+    }
+
+    // Handle BotBooru cards
+    if (card.isBotbooru || card.service === 'botbooru' || card.sourceService === 'botbooru') {
+        console.log('[CleanBotBrowser] Importing BotBooru card:', card.name);
+        return await importApiCard(card, extensionName, extension_settings, importStats, 'botbooru', getBotbooruPost, transformFullBotbooruPost);
     }
 
     // Handle CrushOn.ai cards

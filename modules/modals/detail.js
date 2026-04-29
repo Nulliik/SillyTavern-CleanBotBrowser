@@ -9,6 +9,7 @@ import { getBackyardCharacter, transformFullBackyardCharacter } from '../service
 import { getPygmalionCharacter, transformFullPygmalionCharacter } from '../services/pygmalionApi.js';
 import { getSakuraCharacter, transformFullSakuraCharacter } from '../services/sakuraApi.js';
 import { getSaucepanCompanion, transformFullSaucepanCompanion } from '../services/saucepanApi.js';
+import { getBotbooruPost, transformFullBotbooruPost } from '../services/botbooruApi.js';
 import { getCrushonCharacter, transformFullCrushonCharacter } from '../services/crushonApi.js';
 import { getHarpyCharacter, transformFullHarpyCharacter } from '../services/harpyApi.js';
 import { getBotifyBot, transformFullBotifyBot } from '../services/botifyApi.js';
@@ -284,6 +285,20 @@ async function loadFullCard(card) {
             return fullCard;
         } catch (error) {
             console.error('[CleanBotBrowser] Failed to load full Saucepan.ai character:', error);
+        }
+    }
+
+    // BotBooru live API cards
+    const looksLikeBotbooruCard = card.isBotbooru || card.service === 'botbooru' || card.sourceService === 'botbooru';
+    if (looksLikeBotbooruCard && card.id && card.isLiveApi) {
+        try {
+            const postData = await getBotbooruPost(card.id);
+            const transformed = transformFullBotbooruPost(postData);
+            fullCard = { ...card, ...transformed, isBotbooru: true };
+            console.log('[CleanBotBrowser] Loaded full BotBooru character:', fullCard.name);
+            return fullCard;
+        } catch (error) {
+            console.error('[CleanBotBrowser] Failed to load full BotBooru character:', error);
         }
     }
 
