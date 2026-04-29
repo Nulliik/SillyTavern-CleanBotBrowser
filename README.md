@@ -1,6 +1,7 @@
 # Note
 This repo if fork of original BotBrowser repository edited by Codex.
 Most of the functions are stable, some sources of bots are broken. Repo is cleaned from weird API found in original repo.
+Do not consider it fully safe
 
 # Bot Browser
 
@@ -134,9 +135,3 @@ Bot Browser now has a much bigger settings surface than before.
 - **Search** defaults for Search All and randomization
 - **Safety** for NSFW handling
 - **Display** options
-
-## Other Extensions
-
-Also check out **Character Library** if you want another really useful SillyTavern extension:
-
-<https://github.com/Sillyanonymous/SillyTavern-CharacterLibrary>
