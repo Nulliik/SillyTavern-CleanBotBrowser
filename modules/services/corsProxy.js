@@ -6,6 +6,7 @@
  */
 export const PROXY_TYPES = {
     PLUGIN: 'plugin',
+    SILLYTAVERN: 'sillytavern',
     PUTER: 'puter',
     CORSPROXY_IO: 'corsproxy_io',
     CORS_EU_ORG: 'cors_eu_org',
@@ -34,6 +35,7 @@ const SENSITIVE_HEADER_NAMES = new Set([
 
 const PLUGIN_FIRST_PROXY_CHAIN = [
     PROXY_TYPES.PLUGIN,
+    PROXY_TYPES.SILLYTAVERN,
     PROXY_TYPES.CORS_EU_ORG,
     PROXY_TYPES.CORSPROXY_IO,
     PROXY_TYPES.CORS_LOL,
@@ -53,6 +55,11 @@ const PROXY_CONFIGS = {
         name: 'CleanBotBrowser Plugin',
         buildUrl: null,
         rateLimit: 'Local SillyTavern server plugin'
+    },
+    [PROXY_TYPES.SILLYTAVERN]: {
+        name: 'SillyTavern CORS Proxy',
+        buildUrl: (targetUrl) => `/proxy/${encodeURIComponent(targetUrl)}`,
+        rateLimit: 'Local SillyTavern server CORS proxy'
     },
     [PROXY_TYPES.PUTER]: {
         name: 'Puter.js Fetch',
@@ -126,7 +133,7 @@ const SERVICE_PROXY_MAP = {
     mlpchag: [PROXY_TYPES.NONE],
 
     // /aicg/ live feed (Neocities HTML pages) - direct fetch is blocked from the standalone app.
-    anchorhold_live: [PROXY_TYPES.PLUGIN, PROXY_TYPES.CORS_EU_ORG, PROXY_TYPES.CORSPROXY_IO, PROXY_TYPES.CORS_LOL],
+    anchorhold_live: [PROXY_TYPES.PLUGIN, PROXY_TYPES.SILLYTAVERN, PROXY_TYPES.CORS_EU_ORG, PROXY_TYPES.CORSPROXY_IO, PROXY_TYPES.CORS_LOL],
 
     // Hosted Character Archive frontend - usually CORS-enabled Flask, so try direct first.
     character_archive: DIRECT_FIRST_PROXY_CHAIN,
@@ -153,7 +160,7 @@ const SERVICE_PROXY_MAP = {
 
     // Botify.ai - public Strapi JSON with working CORS in the standalone/ST iframe UI.
     // Go direct first and keep only local/plugin-style fallbacks to avoid slow public relay hangs.
-    botify: [PROXY_TYPES.NONE, PROXY_TYPES.PLUGIN],
+    botify: [PROXY_TYPES.NONE, PROXY_TYPES.PLUGIN, PROXY_TYPES.SILLYTAVERN],
 
     // BOT3 AI - SSR HTML pages, anonymous browse OK
     bot3: PLUGIN_FIRST_PROXY_CHAIN,
@@ -164,7 +171,7 @@ const SERVICE_PROXY_MAP = {
     // PolyBuzz - public pages now respond cleanly to direct browser fetches in the
     // standalone/ST runtime. Go direct first so rich-card hydration does not pile
     // into plugin 502s or public relay rate limits under parallel fetches.
-    polybuzz: [PROXY_TYPES.NONE, PROXY_TYPES.PLUGIN],
+    polybuzz: [PROXY_TYPES.NONE, PROXY_TYPES.PLUGIN, PROXY_TYPES.SILLYTAVERN],
 
     // Joyland.ai - POST-based API
     joyland: PLUGIN_FIRST_PROXY_CHAIN,
@@ -173,7 +180,7 @@ const SERVICE_PROXY_MAP = {
     spicychat: PLUGIN_FIRST_PROXY_CHAIN,
 
     // Talkie AI - MiniMax platform, requires signed headers (custom x-token/x-sign).
-    talkie: [PROXY_TYPES.PLUGIN, PROXY_TYPES.CORS_EU_ORG, PROXY_TYPES.CORSPROXY_IO, PROXY_TYPES.CORS_LOL],
+    talkie: [PROXY_TYPES.PLUGIN, PROXY_TYPES.SILLYTAVERN, PROXY_TYPES.CORS_EU_ORG, PROXY_TYPES.CORSPROXY_IO, PROXY_TYPES.CORS_LOL],
 
     // CAIBotList - HTML pages + HTMX
     caibotlist: PLUGIN_FIRST_PROXY_CHAIN,
@@ -734,6 +741,20 @@ export async function proxiedFetch(url, options = {}) {
                     response = await fetch(proxyUrl, timedOptions);
                 } finally {
                     cleanup();
+                }
+            }
+
+            if (proxyType === PROXY_TYPES.SILLYTAVERN && !response.ok) {
+                const text = await response.clone().text().catch(() => '');
+                if (
+                    response.status === 404
+                    || /cors proxy is disabled/i.test(text)
+                    || /enable.*cors.*proxy/i.test(text)
+                ) {
+                    const error = new Error('SillyTavern CORS proxy is disabled or unavailable');
+                    errors.push({ proxy: proxyType, error });
+                    debugWarn('[CORS Proxy] SillyTavern CORS proxy unavailable, trying next proxy');
+                    continue;
                 }
             }
 

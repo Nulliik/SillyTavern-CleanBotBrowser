@@ -173,7 +173,6 @@ export async function createCardBrowser(serviceName, cards, state, extensionName
     if (state.isSakura && serviceName === 'sakura') resetSakuraState();
 
     state.isSaucepan = serviceName === 'saucepan' || cards.some(c => c.isSaucepan || c.service === 'saucepan');
-    if (state.isSaucepan && serviceName === 'saucepan') resetSaucepanState();
 
     state.isCrushon = serviceName === 'crushon' || cards.some(c => c.isCrushon || c.service === 'crushon');
     if (state.isCrushon && serviceName === 'crushon') resetCrushonState();
@@ -395,9 +394,11 @@ export async function createCardBrowser(serviceName, cards, state, extensionName
                 ? `Browsing RisuRealm${nsfwText}`
                 : state.isCharacterTavern
                     ? `Browsing Character Tavern${nsfwText}`
-                    : state.isWyvern
-                        ? `Browsing Wyvern Chat${nsfwText}`
-                        : `${cardsWithImages.length} card${cardsWithImages.length !== 1 ? 's' : ''} found${nsfwText}`;
+                        : state.isWyvern
+                            ? `Browsing Wyvern Chat${nsfwText}`
+                            : state.isSaucepan
+                                ? `Browsing Saucepan.ai - page ${saucepanApiState.page || 1}${saucepanApiState.total ? ` of ${Math.ceil(saucepanApiState.total / (saucepanApiState.limit || 24))} (${Number(saucepanApiState.total).toLocaleString()} total)` : ''}${nsfwText}`
+                                : `${cardsWithImages.length} card${cardsWithImages.length !== 1 ? 's' : ''} found${nsfwText}`;
     menuContent.innerHTML = createBrowserHeader(serviceDisplayName, state.filters.search, cardCountText, searchCollapsed, hideNsfw, state.isLiveChub, state.advancedFilters, state.isJannyAI, state.jannyAdvancedFilters, state.isCharacterTavern, state.ctAdvancedFilters, state.isWyvern, state.wyvernAdvancedFilters, state.isRisuRealm);
 
     // Add bulk action bar to the grid wrapper
@@ -1906,7 +1907,7 @@ function renderPage(state, menuContent, showCardDetailFunc, extensionName, exten
     } else if (state.isSakura) {
         paginationHTML = createChubPaginationHTML(1, sakuraApiState.hasMore, false);
     } else if (state.isSaucepan) {
-        paginationHTML = createChubPaginationHTML(1, saucepanApiState.hasMore, false);
+        paginationHTML = createChubPaginationHTML(saucepanApiState.page || 1, saucepanApiState.hasMore, false);
     } else if (state.isCrushon) {
         paginationHTML = createChubPaginationHTML(1, crushonApiState.hasMore, false);
     } else if (state.isHarpy) {
@@ -2733,39 +2734,71 @@ function setupSaucepanPaginationListeners(gridContainer, state, menuContent, sho
 
     pagination.querySelectorAll('.bot-browser-pagination-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
-            if (btn.dataset.action !== 'next' || !saucepanApiState.hasMore) return;
+            const action = btn.dataset.action;
+            const currentPage = saucepanApiState.page || 1;
+            const limit = saucepanApiState.limit || 24;
+            let targetPage = currentPage;
+
+            if (action === 'next' && saucepanApiState.hasMore) {
+                targetPage = currentPage + 1;
+            } else if (action === 'prev' && currentPage > 1) {
+                targetPage = currentPage - 1;
+            } else {
+                return;
+            }
 
             btn.disabled = true;
             btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
 
             try {
+                const targetOffset = (targetPage - 1) * limit;
                 const result = await searchSaucepanCompanions({
                     search: saucepanApiState.lastSearch,
                     sort: saucepanApiState.lastSort,
-                    offset: saucepanApiState.offset,
+                    offset: targetOffset,
+                    limit,
                     nsfw: !extension_settings[extensionName].hideNsfw
                 });
 
                 const cards = result.characters.map(transformSaucepanCard);
-                saucepanApiState.offset += result.characters.length;
+                saucepanApiState.page = targetPage;
+                saucepanApiState.offset = targetOffset + cards.length;
                 saucepanApiState.hasMore = result.hasMore;
+                saucepanApiState.total = result.total;
 
-                state.currentCards = [...state.currentCards, ...cards];
+                state.currentCards = cards;
                 state.filteredCards = applyClientSideFilters(state.currentCards, state, extensionName, extension_settings);
-                state.currentPage = 1;
                 state.totalPages = 1;
+                state.currentPage = 1;
 
                 renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
-                console.log(`[CleanBotBrowser] Loaded ${cards.length} more Saucepan cards`);
+                updateSaucepanCount(menuContent, extensionName, extension_settings);
+                console.log(`[CleanBotBrowser] Loaded Saucepan page ${targetPage} (${cards.length} cards, ${saucepanApiState.offset}/${saucepanApiState.total || 'unknown'})`);
             } catch (error) {
                 console.error('[CleanBotBrowser] Failed to load more Saucepan cards:', error);
                 toastr.error('Failed to load more cards');
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = 'Load More <i class="fa-solid fa-angle-right"></i>';
+                btn.innerHTML = action === 'next'
+                    ? 'Next <i class="fa-solid fa-angle-right"></i>'
+                    : '<i class="fa-solid fa-angle-left"></i> Previous';
             }
         });
     });
+}
+
+function updateSaucepanCount(menuContent, extensionName, extension_settings) {
+    const countContainer = menuContent?.querySelector('.bot-browser-results-count');
+    if (!countContainer) return;
+    const hideNsfw = extension_settings[extensionName].hideNsfw || false;
+    const nsfwText = hideNsfw ? ' (after hiding NSFW)' : '';
+    const total = Number(saucepanApiState.total || 0);
+    const page = saucepanApiState.page || 1;
+    const limit = saucepanApiState.limit || 24;
+    const totalPages = total > 0 ? Math.ceil(total / limit) : null;
+    countContainer.textContent = totalPages
+        ? `Browsing Saucepan.ai - page ${page} of ${totalPages} (${total.toLocaleString()} total)${nsfwText}`
+        : `Browsing Saucepan.ai - page ${page}${nsfwText}`;
 }
 
 function setupCrushonPaginationListeners(gridContainer, state, menuContent, showCardDetailFunc, extensionName, extension_settings) {

@@ -8,6 +8,8 @@ const CDN = 'https://cdn.saucepan.ai';
 
 export let saucepanApiState = {
     offset: 0,
+    limit: 24,
+    page: 1,
     hasMore: true,
     isLoading: false,
     lastSearch: '',
@@ -16,7 +18,7 @@ export let saucepanApiState = {
 };
 
 export function resetSaucepanState() {
-    saucepanApiState = { offset: 0, hasMore: true, isLoading: false, lastSearch: '', lastSort: 'popularity', total: 0 };
+    saucepanApiState = { offset: 0, limit: 24, page: 1, hasMore: true, isLoading: false, lastSearch: '', lastSort: 'popularity', total: 0 };
 }
 
 function getSaucepanAuthHeaders() {
@@ -37,7 +39,7 @@ function getSaucepanAuthProxyConfig() {
 
     return {
         // Auth-bearing requests must stay on direct/local transports.
-        proxyChain: [PROXY_TYPES.CORS_EU_ORG, PROXY_TYPES.CORSPROXY_IO, PROXY_TYPES.PUTER, PROXY_TYPES.NONE, PROXY_TYPES.CORS_LOL],
+        proxyChain: [PROXY_TYPES.SILLYTAVERN, PROXY_TYPES.CORS_EU_ORG, PROXY_TYPES.CORSPROXY_IO, PROXY_TYPES.PUTER, PROXY_TYPES.NONE, PROXY_TYPES.CORS_LOL],
         allowPublicAuth: false,
     };
 }
@@ -338,12 +340,16 @@ export async function searchSaucepanCompanions(options = {}) {
     const data = await response.json();
 
     const companions = data.companions || [];
-    const total = data.total_count || 0;
+    const total = Number(data.total_count || data.total || data.count || 0);
+    const numericLimit = Number(limit) || companions.length || 24;
+    const numericTotal = Number(total) || 0;
 
     return {
         characters: companions,
         total,
-        hasMore: offset + companions.length < total
+        hasMore: numericTotal > 0
+            ? offset + companions.length < numericTotal
+            : companions.length >= numericLimit
     };
 }
 

@@ -218,8 +218,12 @@ export function deduplicateCards(cards) {
 // Global Intersection Observer for lazy image validation
 let imageObserver = null;
 
-// Public image proxy fallback is disabled in this cleaned build.
-const IMAGE_PROXY_CHAIN = [];
+const IMAGE_PROXY_CHAIN = [
+    PROXY_TYPES.SILLYTAVERN,
+    PROXY_TYPES.CORS_EU_ORG,
+    PROXY_TYPES.CORSPROXY_IO,
+    PROXY_TYPES.CORS_LOL,
+];
 
 async function checkImageExists(url) {
     let sawForbidden = false;

@@ -1729,6 +1729,8 @@ function setupSourceButtons(menu) {
                     saucepanApiState.offset = result.characters.length;
                     saucepanApiState.hasMore = result.hasMore;
                     saucepanApiState.total = result.total;
+                    saucepanApiState.limit = 24;
+                    saucepanApiState.page = 1;
                     saucepanApiState.lastSearch = persistedSearch?.filters?.search || '';
                     saucepanApiState.lastSort = spSort;
 
