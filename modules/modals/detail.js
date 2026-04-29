@@ -1,5 +1,5 @@
 import { loadCardChunk } from '../services/cache.js';
-import { addToRecentlyViewed, isBookmarked, addBookmark, removeBookmark } from '../storage/storage.js';
+import { addToRecentlyViewed, isBookmarked, addBookmark, removeBookmark, isFavoriteCreator, toggleFavoriteCreator } from '../storage/storage.js';
 import { buildDetailModalHTML } from '../templates/detailModal.js';
 import { prepareCardDataForModal } from '../data/cardPreparation.js';
 import { getChubCharacter, transformFullChubCharacter, getChubLorebook } from '../services/chubApi.js';
@@ -442,6 +442,7 @@ function createDetailModal(fullCard, isRandom = false) {
 
     const cardData = prepareCardDataForModal(fullCard, isLorebook);
     const cardIsBookmarked = isBookmarked(fullCard.id);
+    const creatorIsFollowed = isFavoriteCreator(fullCard);
 
     // Check if this is an imported card from "My Imports"
     const isImported = fullCard.service === 'my_imports' || fullCard.isLocal === true;
@@ -511,7 +512,8 @@ function createDetailModal(fullCard, isRandom = false) {
         characterExistsInST,
         sourceUrlData,
         chubFeatures,
-        isLocalContent
+        isLocalContent,
+        creatorIsFollowed
     );
 
     return { detailOverlay, detailModal };
@@ -641,6 +643,24 @@ function setupDetailModalEvents(detailModal, detailOverlay, fullCard, state) {
                 toastr.error('Failed to update favorite');
             } finally {
                 chubFavBtn.disabled = false;
+            }
+        });
+    }
+
+    const favoriteCreatorBtn = detailModal.querySelector('.bot-browser-favorite-creator-btn');
+    if (favoriteCreatorBtn) {
+        favoriteCreatorBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+
+            try {
+                const result = toggleFavoriteCreator(fullCard);
+                favoriteCreatorBtn.classList.toggle('following', result.following);
+                favoriteCreatorBtn.querySelector('span').textContent = result.following ? 'Following' : 'Follow Creator';
+                toastr.success(result.following ? `Following ${fullCard.creator}` : `Unfollowed ${fullCard.creator}`, '', { timeOut: 2000 });
+            } catch (error) {
+                console.error('[Bot Browser] Failed to toggle favorite creator:', error);
+                toastr.error('Could not update favorite creator');
             }
         });
     }

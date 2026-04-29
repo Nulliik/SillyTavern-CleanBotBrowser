@@ -137,6 +137,12 @@ export function getOriginalMenuHTML(recentlyViewed) {
                     </div>
                     <span>My Characters</span>
                 </button>
+                <button class="bot-browser-source" data-source="favorite_creators">
+                    <div class="bot-browser-source-icon" style="background: linear-gradient(135deg, rgba(255, 190, 80, 0.34), rgba(80, 170, 220, 0.26)); display: flex; align-items: center; justify-content: center; font-size: 26px; color: rgba(255, 255, 255, 0.9);">
+                        <i class="fa-solid fa-bell"></i>
+                    </div>
+                    <span>Favorite Creators</span>
+                </button>
                 <!-- Live API Sources (sorted by size - largest first) -->
                 <button class="bot-browser-source" data-source="chub">
                     <div class="bot-browser-source-icon" style="background-image: url('https://avatars.charhub.io/icons/assets/full_logo.png'); background-size: cover; background-position: center; background-repeat: no-repeat; background-color: white;"></div>

@@ -25,7 +25,7 @@ function formatStatRating(value) {
     return number.toFixed(1);
 }
 
-export function buildDetailModalHTML(cardName, imageUrl, isLorebook, cardCreator, tags, creator, websiteDesc, description, descPreview, personality, scenario, firstMessage, alternateGreetings, exampleMsg, entries, entriesCount, metadata, isBookmarked = false, isRandom = false, isImported = false, characterExistsInST = false, sourceUrlData = null, chubFeatures = null, isLocalContent = false) {
+export function buildDetailModalHTML(cardName, imageUrl, isLorebook, cardCreator, tags, creator, websiteDesc, description, descPreview, personality, scenario, firstMessage, alternateGreetings, exampleMsg, entries, entriesCount, metadata, isBookmarked = false, isRandom = false, isImported = false, characterExistsInST = false, sourceUrlData = null, chubFeatures = null, isLocalContent = false, isFavoriteCreator = false) {
     const safeImageUrl = sanitizeImageUrl(imageUrl);
     const safeSourceUrl = sourceUrlData ? sanitizeHttpUrl(sourceUrlData.url) : '';
     const safeSourceServiceName = sourceUrlData ? escapeHTML(sourceUrlData.serviceName || 'website') : '';
@@ -96,6 +96,12 @@ export function buildDetailModalHTML(cardName, imageUrl, isLorebook, cardCreator
                             <i class="fa-${isBookmarked ? 'solid' : 'regular'} fa-bookmark"></i>
                             <span>${isBookmarked ? 'Saved' : 'Save'}</span>
                         </button>
+                        ${creator ? `
+                        <button class="bot-browser-favorite-creator-btn ${isFavoriteCreator ? 'following' : ''}" title="${isFavoriteCreator ? 'Unfollow creator' : 'Follow creator for update pings'}">
+                            <i class="fa-solid fa-bell"></i>
+                            <span>${isFavoriteCreator ? 'Following' : 'Follow Creator'}</span>
+                        </button>
+                        ` : ''}
                         ${chubFeatures?.isChubCard && chubFeatures?.isLoggedIn ? `
                         <button class="bot-browser-chub-favorite-btn ${chubFeatures.isFavorited ? 'favorited' : ''}" data-char-id="${escapeHTML(chubFeatures.charId || '')}">
                             <i class="fa-${chubFeatures.isFavorited ? 'solid' : 'regular'} fa-heart"></i>

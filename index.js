@@ -3,7 +3,7 @@ import { eventSource, event_types, saveSettingsDebounced, getRequestHeaders, get
 import { importWorldInfo, updateWorldInfoList } from '/scripts/world-info.js';
 
 // Import modules
-import { loadImportStats, saveImportStats, loadRecentlyViewed, loadPersistentSearch, loadBookmarks, removeBookmark, clearImportedCards } from './modules/storage/storage.js';
+import { loadImportStats, saveImportStats, loadRecentlyViewed, loadPersistentSearch, loadBookmarks, removeBookmark, clearImportedCards, loadFavoriteCreators } from './modules/storage/storage.js';
 import { getTimeAgo } from './modules/storage/stats.js';
 import { loadServiceIndex, initializeServiceCache } from './modules/services/cache.js';
 import { getRandomCard } from './modules/services/cards.js';
@@ -82,6 +82,7 @@ import {
     authState, isLoggedIn, initAuthFromSettings,
     fetchCharaVaultFavorites, fetchSakuraFavorites, fetchCrushonLikes
 } from './modules/services/authManager.js';
+import { loadFavoriteCreatorsFeed, checkFavoriteCreatorUpdates } from './modules/services/favoriteCreators.js';
 
 // Extension version (from manifest.json)
 const EXTENSION_VERSION = '2.0.5';
@@ -221,6 +222,7 @@ const defaultSettings = {
     useWyvernLiveApi: true,
     autoClearFilters: true,
     randomServices: getDefaultRandomServiceSettings(),
+    favoriteCreatorPings: true,
 };
 
 // Stats storage
@@ -1505,6 +1507,23 @@ function setupSourceButtons(menu) {
                     }
 
                     console.log(`[Bot Browser] Loaded ${cards.length} local lorebooks`);
+                } else if (sourceName === 'favorite_creators') {
+                    toastr.info('Loading favorite creators...', '', { timeOut: 2000 });
+
+                    const favorites = loadFavoriteCreators();
+                    if (favorites.length === 0) {
+                        toastr.info('Follow creators from card details to see their new cards here.', 'Favorite Creators', { timeOut: 4000 });
+                    }
+
+                    cards = await loadFavoriteCreatorsFeed({
+                        hideNsfw: extension_settings[extensionName].hideNsfw,
+                    });
+
+                    if (cards.length === 0 && favorites.length > 0) {
+                        toastr.info('No cards found from followed creators right now.', 'Favorite Creators', { timeOut: 4000 });
+                    }
+
+                    console.log(`[Bot Browser] Loaded ${cards.length} cards from ${favorites.length} favorite creators`);
                 } else if (sourceName === 'jannyai') {
                     // JannyAI uses its own live API
                     toastr.info('Loading JannyAI...', '', { timeOut: 2000 });
@@ -1987,6 +2006,34 @@ function withTimeout(promise, timeoutMs, label) {
             setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
         }),
     ]);
+}
+
+async function showFavoriteCreatorPings() {
+    if (extension_settings[extensionName].favoriteCreatorPings === false) return;
+    const favorites = loadFavoriteCreators();
+    if (favorites.length === 0) return;
+
+    const lastCheckKey = 'botBrowser_favoriteCreatorsLastPingCheck';
+    const lastCheck = Date.parse(localStorage.getItem(lastCheckKey) || 0) || 0;
+    if (Date.now() - lastCheck < 30 * 60 * 1000) return;
+    localStorage.setItem(lastCheckKey, new Date().toISOString());
+
+    try {
+        const updates = await checkFavoriteCreatorUpdates({
+            hideNsfw: extension_settings[extensionName].hideNsfw,
+        });
+
+        if (updates.length > 0) {
+            const first = updates[0];
+            toastr.info(
+                `${updates.length} followed creator${updates.length === 1 ? '' : 's'} posted new cards. Latest: ${first.card?.name || 'New card'} by ${first.favorite.creator}.`,
+                'Favorite Creators',
+                { timeOut: 7000 }
+            );
+        }
+    } catch (error) {
+        console.warn('[Bot Browser] Favorite creator ping check failed:', error);
+    }
 }
 
 async function loadRandomCardsForService(selectedService) {
@@ -2894,6 +2941,7 @@ function createBotBrowserMenu(options = {}) {
     if (updateContainer) {
         initUpdateChecker(updateContainer, EXTENSION_VERSION);
     }
+    showFavoriteCreatorPings();
 
     console.log('[Bot Browser] Menu created and displayed');
 }

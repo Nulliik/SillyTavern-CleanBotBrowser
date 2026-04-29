@@ -4475,6 +4475,34 @@ body #bot-browser-settings-modal,
     color: #ff8f8f;
 }
 
+.bot-browser-favorite-creator-btn {
+    flex: 1;
+    padding: 10px 16px;
+    background: linear-gradient(135deg, rgba(255, 190, 80, 0.22), rgba(80, 170, 220, 0.2));
+    border: 1px solid rgba(255, 190, 80, 0.42);
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.92);
+    font-size: 0.9em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.bot-browser-favorite-creator-btn.following {
+    background: linear-gradient(135deg, rgba(255, 190, 80, 0.36), rgba(80, 170, 220, 0.3));
+    border-color: rgba(255, 190, 80, 0.68);
+}
+
+.bot-browser-favorite-creator-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(255, 190, 80, 0.18);
+}
+
 @media (max-width: 760px) {
     .bot-browser-local-editor-grid {
         grid-template-columns: 1fr;

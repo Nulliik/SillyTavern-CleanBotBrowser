@@ -269,6 +269,100 @@ export function isBookmarked(cardId) {
     return bookmarks.some(b => b.id === cardId);
 }
 
+const FAVORITE_CREATORS_KEY = 'botBrowser_favoriteCreators';
+
+function getCreatorKey(service, creator) {
+    return `${String(service || 'unknown').trim().toLowerCase()}::${String(creator || '').trim().toLowerCase()}`;
+}
+
+export function loadFavoriteCreators() {
+    try {
+        const saved = localStorage.getItem(FAVORITE_CREATORS_KEY);
+        return saved ? JSON.parse(saved) : [];
+    } catch (error) {
+        console.error('[Bot Browser] Error loading favorite creators:', error);
+        return [];
+    }
+}
+
+export function saveFavoriteCreators(creators) {
+    try {
+        localStorage.setItem(FAVORITE_CREATORS_KEY, JSON.stringify(Array.isArray(creators) ? creators : []));
+    } catch (error) {
+        console.error('[Bot Browser] Error saving favorite creators:', error);
+    }
+}
+
+export function getFavoriteCreator(card) {
+    const service = card?.service || card?.sourceService || 'unknown';
+    const creator = card?.creator || '';
+    const key = getCreatorKey(service, creator);
+    return loadFavoriteCreators().find(item => item.key === key) || null;
+}
+
+export function isFavoriteCreator(card) {
+    return !!getFavoriteCreator(card);
+}
+
+export function toggleFavoriteCreator(card) {
+    const creator = String(card?.creator || '').trim();
+    if (!creator) {
+        throw new Error('Cannot follow a card without a creator name.');
+    }
+
+    const service = card?.service || card?.sourceService || 'unknown';
+    const key = getCreatorKey(service, creator);
+    const creators = loadFavoriteCreators();
+    const existingIndex = creators.findIndex(item => item.key === key);
+
+    if (existingIndex !== -1) {
+        const removed = creators.splice(existingIndex, 1)[0];
+        saveFavoriteCreators(creators);
+        return { following: false, creator: removed };
+    }
+
+    const followed = {
+        key,
+        creator,
+        service,
+        displayService: card?.service || card?.sourceService || 'unknown',
+        followedAt: new Date().toISOString(),
+        lastSeenAt: card?.updated_at || card?.created_at || new Date().toISOString(),
+        latestCardId: card?.id || '',
+        latestCardName: card?.name || '',
+        creatorId: card?.creatorId || card?.creatorUid || card?.ownerCTId || '',
+        creatorUsername: card?.creatorUsername || card?.creatorUrl || '',
+        sampleCard: {
+            id: card?.id || '',
+            creator,
+            service,
+            sourceService: card?.sourceService || card?.service || '',
+            isLiveChub: !!card?.isLiveChub,
+            isCharacterTavern: !!card?.isCharacterTavern,
+            isBackyard: !!card?.isBackyard,
+            isPygmalion: !!card?.isPygmalion,
+            isWyvern: !!card?.isWyvern,
+            fullPath: card?.fullPath || '',
+            path: card?.path || '',
+            creatorId: card?.creatorId || '',
+            creatorUid: card?.creatorUid || '',
+        },
+    };
+
+    creators.unshift(followed);
+    saveFavoriteCreators(creators);
+    return { following: true, creator: followed };
+}
+
+export function updateFavoriteCreator(key, patch) {
+    const creators = loadFavoriteCreators();
+    const index = creators.findIndex(item => item.key === key);
+    if (index === -1) return null;
+    creators[index] = { ...creators[index], ...patch };
+    saveFavoriteCreators(creators);
+    return creators[index];
+}
+
 // Load imported cards from localStorage (for "My Imports" browsing)
 export function loadImportedCards() {
     try {
