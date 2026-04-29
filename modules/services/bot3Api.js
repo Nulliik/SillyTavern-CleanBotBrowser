@@ -1,4 +1,5 @@
 import { isCleanBotBrowserPluginAvailable, proxiedFetch } from './corsProxy.js';
+import { htmlToPlainText } from '../utils/utils.js';
 
 const BOT3_BASE = 'https://bot3.ai';
 const JINA_PREFIX = 'https://r.jina.ai/http://';
@@ -196,16 +197,7 @@ function extractJinaContent(text) {
 }
 
 function stripHtmlTags(value) {
-    return String(value || '')
-        .replace(/<br\s*\/?>/gi, ' ')
-        .replace(/<\/p>/gi, ' ')
-        .replace(/<[^>]+>/g, ' ')
-        .replace(/&nbsp;/gi, ' ')
-        .replace(/&amp;/gi, '&')
-        .replace(/&lt;/gi, '<')
-        .replace(/&gt;/gi, '>')
-        .replace(/\s+/g, ' ')
-        .trim();
+    return htmlToPlainText(value);
 }
 
 function getNodeText(node) {

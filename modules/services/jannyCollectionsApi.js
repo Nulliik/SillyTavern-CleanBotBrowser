@@ -1,5 +1,6 @@
 // JannyAI Collections API - fetches and parses collections via CORS proxy
 import { proxiedFetch } from './corsProxy.js';
+import { decodeHtmlEntities, htmlToPlainText } from '../utils/utils.js';
 
 const JANNY_COLLECTIONS_URL = 'https://jannyai.com/collections';
 const JANNY_IMAGE_BASE = 'https://image.jannyai.com/bot-avatars/';
@@ -41,13 +42,14 @@ export async function fetchJannyCollections(options = {}) {
     return parseCollectionsPage(html, page, sort);
 }
 
-/**
- * Strip HTML comments from text
- * @param {string} text - Text with HTML comments
- * @returns {string} Text without comments
- */
 function stripHtmlComments(text) {
-    return text.replace(/<!--[\s\S]*?-->/g, '');
+    const template = document.createElement('template');
+    template.innerHTML = String(text || '');
+    const walker = document.createTreeWalker(template.content, NodeFilter.SHOW_COMMENT);
+    const comments = [];
+    while (walker.nextNode()) comments.push(walker.currentNode);
+    comments.forEach((comment) => comment.remove());
+    return template.innerHTML;
 }
 
 /**
@@ -275,7 +277,7 @@ function parseCollectionDetailsPage(html, collectionId, slug) {
     const rawCollectionName = h1TextMatch
         ? h1TextMatch[1]
         : (h1Match
-            ? h1Match[1].replace(/<[^>]*>/g, ' ')
+            ? htmlToPlainText(h1Match[1])
             : (titleMatch ? titleMatch[1] : ''));
     const collectionName = decodeHtmlEntities(
         rawCollectionName
@@ -296,7 +298,7 @@ function parseCollectionDetailsPage(html, collectionId, slug) {
     const lastUpdated = lastUpdatedMatch ? lastUpdatedMatch[1] : '';
     const descriptionMatch = cleanHtml.match(/<div class="markdown[^"]*">\s*<div><p>([\s\S]*?)<\/p>/i);
     const description = descriptionMatch
-        ? decodeHtmlEntities(descriptionMatch[1].replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim())
+        ? htmlToPlainText(descriptionMatch[1])
         : '';
     const characterCountMatch = cleanHtml.match(/Characters\s*\((\d+)\)/i);
     const characterCount = characterCountMatch ? parseInt(characterCountMatch[1]) : 0;
@@ -383,24 +385,6 @@ function parseCollectionDetailsPage(html, collectionId, slug) {
         characters,
         url: `https://jannyai.com/collections/${collectionId}_${slug}`
     };
-}
-
-/**
- * Decode HTML entities
- * @param {string} text - Text with HTML entities
- * @returns {string} Decoded text
- */
-function decodeHtmlEntities(text) {
-    if (!text) return '';
-    return text
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/&#x27;/g, "'")
-        .replace(/&nbsp;/g, ' ')
-        .trim();
 }
 
 /**

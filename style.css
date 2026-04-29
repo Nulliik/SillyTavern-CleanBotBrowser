@@ -1260,6 +1260,20 @@ body .bot-browser-detail-modal {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
+.bot-browser-card-thumbnail.anti-slop-dimmed {
+    opacity: 0.48;
+    filter: saturate(0.55);
+}
+
+.bot-browser-card-thumbnail.anti-slop-dimmed:hover {
+    opacity: 0.8;
+    filter: saturate(0.8);
+}
+
+.bot-browser-card-thumbnail.anti-slop-flagged {
+    border-color: rgba(245, 158, 11, 0.38);
+}
+
 /* Multi-select mode styles */
 .bot-browser-multi-select-toggle {
     background: rgba(255, 255, 255, 0.08);
@@ -1456,6 +1470,34 @@ body .bot-browser-detail-modal {
 
 .bot-browser-own-badge i {
     font-size: 0.9em;
+}
+
+.bot-browser-anti-slop-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 2;
+    padding: 5px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(167, 243, 208, 0.78);
+    background: rgba(4, 120, 87, 0.88);
+    color: #ecfdf5;
+    font-size: 0.68em;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: 0;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.55);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+
+.multi-select-mode .bot-browser-anti-slop-badge {
+    top: 38px;
+}
+
+.bot-browser-anti-slop-badge.flagged {
+    background: rgba(180, 83, 9, 0.92);
+    border-color: rgba(253, 230, 138, 0.86);
+    color: #fffbeb;
 }
 
 .bot-browser-card-image {
@@ -4771,6 +4813,59 @@ body .st-proxy-modal-backdrop,
     pointer-events: none;
     z-index: 2;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.bb-anti-slop-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.bb-anti-slop-number-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.bb-anti-slop-number {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.035);
+}
+
+.bb-anti-slop-number label {
+    color: rgba(255, 255, 255, 0.84);
+    font-size: 0.78em;
+    font-weight: 600;
+}
+
+.bb-anti-slop-number input {
+    width: 100%;
+    min-width: 0;
+    padding: 8px 9px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.25);
+    color: #fff;
+    font-size: 0.86em;
+}
+
+.bb-anti-slop-number small {
+    color: rgba(255, 255, 255, 0.52);
+    font-size: 0.72em;
+    line-height: 1.35;
+}
+
+@media (max-width: 760px) {
+    .bb-anti-slop-grid,
+    .bb-anti-slop-number-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 /* Chub Favorite button in detail modal */

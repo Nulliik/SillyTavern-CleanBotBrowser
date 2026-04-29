@@ -1,4 +1,6 @@
 import { buildProxyUrl, PROXY_TYPES, proxiedFetch } from './corsProxy.js';
+import { annotateAntiSlop, shouldScoreAntiSlop } from './antiSlop.js';
+import { isProxiedUrl, secureRandomInt } from '../utils/utils.js';
 
 export function getAllTags(cards) {
     // Use Map to normalize tags (lowercase key -> original display value)
@@ -69,8 +71,9 @@ export function sortCards(cards, sortBy) {
 export function filterCards(cards, filters, fuse, extensionName, extension_settings) {
     let filteredCards = cards;
 
-    const blocklist = extension_settings[extensionName].tagBlocklist || [];
-    const hideNsfw = extension_settings[extensionName].hideNsfw || false;
+    const settings = extension_settings[extensionName] || {};
+    const blocklist = settings.tagBlocklist || [];
+    const hideNsfw = settings.hideNsfw || false;
     console.log(`[CleanBotBrowser] filterCards: blocklist=[${blocklist.join(', ')}], hideNsfw=${hideNsfw}, search="${filters.search || ''}", tags=[${filters.tags?.join(', ') || ''}], creator="${filters.creator || ''}", input=${cards.length} cards`);
 
     // Text search using Fuse.js for fuzzy matching
@@ -80,7 +83,27 @@ export function filterCards(cards, filters, fuse, extensionName, extension_setti
         filteredCards = searchResults.map(result => result.item);
     }
 
-    // Apply additional filters (tags, creator, and NSFW)
+    if (shouldScoreAntiSlop(settings)) {
+        filteredCards = filteredCards.map(card => {
+            const scored = {
+                ...annotateAntiSlop(card, settings),
+                antiSlopDimmed: !!(settings.antiSlopEnabled && settings.antiSlopMode !== 'hide'),
+            };
+            const shouldKeepLabel = settings.antiSlopShowBadges || settings.antiSlopAlwaysShowLabels || (settings.antiSlopEnabled && scored.antiSlopFlagged);
+            if (shouldKeepLabel) return scored;
+            const {
+                antiSlopScore,
+                antiSlopReasons,
+                antiSlopMatchedRules,
+                antiSlopFlagged,
+                antiSlopDimmed,
+                ...unlabeled
+            } = scored;
+            return unlabeled;
+        });
+    }
+
+    // Apply additional filters (tags, creator, NSFW, and Anti-Slop hide mode)
     filteredCards = filteredCards.filter(card => {
         // Tag filter (must have ALL selected tags) - case-insensitive
         if (filters.tags.length > 0) {
@@ -97,12 +120,18 @@ export function filterCards(cards, filters, fuse, extensionName, extension_setti
         }
 
         // NSFW filter - hide NSFW cards if hideNsfw is enabled
-        if (extension_settings[extensionName].hideNsfw && card.possibleNsfw) {
+        if (settings.hideNsfw && card.possibleNsfw) {
+            return false;
+        }
+
+        // Anti-Slop hide mode - dim mode keeps cards visible but annotated
+        if (settings.antiSlopEnabled && settings.antiSlopMode === 'hide' && card.antiSlopFlagged) {
+            console.log(`[CleanBotBrowser] Anti-Slop: Hiding "${card.name}" - score ${card.antiSlopScore}`);
             return false;
         }
 
         // Tag blocklist filter - hide cards with blocked tags or terms in description
-        const blocklist = extension_settings[extensionName].tagBlocklist || [];
+        const blocklist = settings.tagBlocklist || [];
         if (blocklist.length > 0) {
             // Normalize blocklist terms (lowercase, trim)
             const normalizedBlocklist = blocklist.map(term => term.toLowerCase().trim()).filter(term => term.length > 0);
@@ -322,13 +351,11 @@ function getImageObserver() {
                     if (bgImage && bgImage !== 'none' && !imageDiv.dataset.validated) {
                         imageDiv.dataset.validated = 'true';
 
-                        // Extract URL from background-image style
-                        const urlMatch = bgImage.match(/url\(["']?(.+?)["']?\)/);
-                        if (urlMatch && urlMatch[1]) {
-                            const imageUrl = urlMatch[1];
+                        const imageUrl = imageDiv.dataset.imageUrl;
+                        if (imageUrl) {
 
                             // Skip if already proxied
-                            if (imageUrl.includes('corsproxy.io') || imageUrl.includes('cors.eu.org') || imageUrl.includes('api.cors.lol') || imageUrl.includes('cors.workers.dev') || imageUrl.startsWith('/proxy/')) {
+                            if (isProxiedUrl(imageUrl)) {
                                 return;
                             }
 
@@ -463,7 +490,7 @@ export async function getRandomCard(source, currentCards, loadServiceIndexFunc, 
         }
 
         // Pick random
-        const randomIndex = Math.floor(Math.random() * cards.length);
+        const randomIndex = secureRandomInt(cards.length);
         const randomCard = cards[randomIndex];
 
         console.log('[CleanBotBrowser] Selected random card:', randomCard.name);

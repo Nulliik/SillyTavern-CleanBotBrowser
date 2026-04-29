@@ -17,6 +17,7 @@ import { transformFullJoylandBot } from '../services/joylandApi.js';
 import { transformFullSpicychatCharacter } from '../services/spicychatApi.js';
 import { getTalkieCharacter, transformFullTalkieCharacter } from '../services/talkieApi.js';
 import { extractCharacterDataFromPngArrayBuffer } from './embeddedCardParser.js';
+import { hostnameMatches, secureRandomToken } from '../utils/utils.js';
 
 /**
  * Import a character file directly without tag popup
@@ -119,14 +120,15 @@ async function fetchImageWithProxyChain(imageUrl) {
 
 function sanitizeCardText(value, maxLength = 60000) {
     if (value === null || value === undefined) return '';
-    return String(value)
+    const template = document.createElement('template');
+    template.innerHTML = String(value)
         .replace(/\u0000/g, '')
         .replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
-        .replace(/<\s*script\b[^>]*>[\s\S]*?<\s*\/\s*script\s*>/gi, '')
-        .replace(/\son[a-z]+\s*=\s*(['"]).*?\1/gi, '')
-        .replace(/\son[a-z]+\s*=\s*[^\s>]+/gi, '')
-        .replace(/javascript\s*:/gi, 'blocked:')
         .slice(0, maxLength);
+    template.content
+        .querySelectorAll('script, style, iframe, object, embed, link, meta, base')
+        .forEach((element) => element.remove());
+    return template.content.textContent || '';
 }
 
 function sanitizeCardTextArray(value, maxItems = 50) {
@@ -493,7 +495,7 @@ async function importCharacter(card, extensionName, extension_settings, importSt
     }
     // For Chub cards and cards with Chub avatars, prioritize avatar_url
     else if (card.service === 'chub' || card.sourceService === 'chub' || card.isLiveChub ||
-             (card.avatar_url && (card.avatar_url.includes('charhub.io') || card.avatar_url.includes('characterhub.org') || card.avatar_url.includes('avatars.charhub.io')))) {
+             (card.avatar_url && hostnameMatches(card.avatar_url, ['charhub.io', 'characterhub.org', 'avatars.charhub.io']))) {
         imageUrl = card.avatar_url || card.image_url;
     }
     // For all other services, use avatar_url first
@@ -515,12 +517,12 @@ async function importCharacter(card, extensionName, extension_settings, importSt
         imageBlob = await fetchQuillgenCard(card);
     }
     // Check if this is a realm.risuai.net card - handle different formats
-    else if (imageUrl.includes('realm.risuai.net')) {
+    else if (hostnameMatches(imageUrl, ['realm.risuai.net'])) {
         console.log('[CleanBotBrowser] Detected realm.risuai.net URL');
         console.log('[CleanBotBrowser] imageUrl:', imageUrl);
 
         // Extract UUID from the URL (e.g., https://realm.risuai.net/character/6d0f6490-b2f6-4d81-8bfd-7b3c40e1c589)
-        const uuidMatch = imageUrl.match(/\/character\/([a-f0-9-]+)/i);
+        const uuidMatch = new URL(imageUrl).pathname.match(/\/character\/([a-f0-9-]+)/i);
         if (!uuidMatch) {
             throw new Error('Could not extract UUID from RisuAI URL');
         }
@@ -528,7 +530,7 @@ async function importCharacter(card, extensionName, extension_settings, importSt
         console.log('[CleanBotBrowser] Extracted UUID:', uuid);
 
         imageBlob = await importRisuAICard(uuid, card);
-    } else if (imageUrl.includes('charhub.io') || imageUrl.includes('characterhub.org') || imageUrl.includes('avatars.charhub.io')) {
+    } else if (hostnameMatches(imageUrl, ['charhub.io', 'characterhub.org', 'avatars.charhub.io'])) {
         console.log('[CleanBotBrowser] Detected Chub URL, fetching directly');
         console.log('[CleanBotBrowser] Fetching from:', imageUrl);
 
@@ -1146,8 +1148,8 @@ async function importLiveChubCard(card, extensionName, extension_settings, impor
     let imageUrl = card.avatar_url || card.image_url;
 
     // Add cache-busting for Chub CDN URLs to avoid stale images
-    if (imageUrl && imageUrl.includes('avatars.charhub.io')) {
-        const nocache = Math.random().toString().substring(2);
+    if (imageUrl && hostnameMatches(imageUrl, ['avatars.charhub.io'])) {
+        const nocache = secureRandomToken(8);
         imageUrl = imageUrl.includes('?') ? `${imageUrl}&nocache=${nocache}` : `${imageUrl}?nocache=${nocache}`;
         console.log('[CleanBotBrowser] Using cache-busted Chub avatar URL:', imageUrl);
     }

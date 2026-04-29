@@ -1,6 +1,6 @@
 # Note
 This repo if fork of original BotBrowser repository edited by Codex.
-Most of the functions are stable, some sources of bots are brokem. Repo is cleaned from weird API found in original repo.
+Most of the functions are stable, some sources of bots are broken. Repo is cleaned from weird API found in original repo.
 
 # Bot Browser
 

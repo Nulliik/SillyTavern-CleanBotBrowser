@@ -1,4 +1,5 @@
 import { proxiedFetch, getAuthHeadersForService, PROXY_TYPES } from './corsProxy.js';
+import { decodeHtmlEntities, htmlToPlainText } from '../utils/utils.js';
 
 const JANNY_SEARCH_URL = 'https://search.jannyai.com/multi-search';
 const JANNY_API_BASE = 'https://jannyai.com/api';
@@ -783,12 +784,7 @@ function parseAstroCharacterIsland(html) {
     }
 
     const propsEncoded = astroMatch[1];
-    const propsDecoded = propsEncoded
-        .replace(/&quot;/g, '"')
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&#39;/g, "'");
+    const propsDecoded = decodeHtmlEntities(propsEncoded);
 
     let propsJson;
     try {
@@ -1117,15 +1113,7 @@ function generateSlug(name) {
  */
 function stripHtml(html) {
     if (!html) return '';
-    return html
-        .replace(/<[^>]*>/g, '')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .trim();
+    return htmlToPlainText(html);
 }
 
 function normalizePlainText(value) {

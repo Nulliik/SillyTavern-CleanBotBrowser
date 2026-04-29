@@ -4,6 +4,7 @@
 // Characters will be imported with available data (name, greeting, tags).
 
 import { proxiedFetch } from './corsProxy.js';
+import { secureRandomToken } from '../utils/utils.js';
 
 const COLLECTION = 'public_characters_alias';
 const IMAGE_CDN = 'https://cdn.nd-api.com';
@@ -265,9 +266,9 @@ function getSpicychatGuestUserId() {
     const existing = window.localStorage.getItem('guest_user_id') || window.localStorage.getItem('bb_spicychat_guest_user_id');
     if (existing) return existing;
 
-    const guestId = typeof crypto?.randomUUID === 'function'
-        ? crypto.randomUUID()
-        : `bb-spicychat-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const guestId = typeof globalThis.crypto?.randomUUID === 'function'
+        ? globalThis.crypto.randomUUID()
+        : `bb-spicychat-${Date.now()}-${secureRandomToken(12)}`;
 
     window.localStorage.setItem('bb_spicychat_guest_user_id', guestId);
     return guestId;

@@ -3,6 +3,7 @@ let default_avatar = '';
 try { default_avatar = (await import('/script.js')).default_avatar; } catch {}
 
 import { loadQuillgenIndex } from './quillgenApi.js';
+import { secureRandomInt } from '../utils/utils.js';
 import { searchCharacterTavern, characterTavernApiState, resetCharacterTavernState } from './characterTavernApi.js';
 import { loadMlpchagLive, clearMlpchagCache, getMlpchagApiState, resetMlpchagState } from './mlpchagApi.js';
 import {
@@ -479,7 +480,7 @@ function pickCard(cards) {
     );
 
     if (cardsWithChunks.length > 0) {
-        return cardsWithChunks[Math.floor(Math.random() * cardsWithChunks.length)];
+        return cardsWithChunks[secureRandomInt(cardsWithChunks.length)];
     }
 
     return null;

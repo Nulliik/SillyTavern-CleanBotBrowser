@@ -3,6 +3,7 @@
 
 import { proxiedFetch, CORS_PROXY } from './corsProxy.js';
 import { getJannyAvatarUrl, getJannyCharactersByIds } from './jannyApi.js';
+import { htmlToPlainText } from '../utils/utils.js';
 
 // ==================== CHARACTER TAVERN TRENDING ====================
 
@@ -569,15 +570,7 @@ export function transformJannyTrendingCard(char) {
  */
 function stripHtmlTags(html) {
     if (!html) return '';
-    return html
-        .replace(/<[^>]*>/g, '')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .trim();
+    return htmlToPlainText(html);
 }
 
 // ==================== BACKYARD.AI TRENDING ====================

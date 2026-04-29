@@ -1945,7 +1945,7 @@ function renderPage(state, menuContent, showCardDetailFunc, extensionName, exten
             }
 
             // Normal mode - open detail modal
-            const card = state.currentCards.find(c => c.id === cardId);
+            const card = state.filteredCards.find(c => c.id === cardId) || state.currentCards.find(c => c.id === cardId);
             if (card) {
                 await showCardDetailFunc(card);
             }

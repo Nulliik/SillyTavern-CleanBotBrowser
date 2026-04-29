@@ -2,6 +2,7 @@
 // Vue 3 SPA, POST-based API, fingerprint required for rate limiting
 
 import { getAuthHeadersForService, proxiedFetch, PROXY_TYPES } from './corsProxy.js';
+import { secureRandomToken } from '../utils/utils.js';
 
 const API_BASE = 'https://api.joyland.ai';
 const joylandDetailCache = new Map();
@@ -33,7 +34,9 @@ function getFingerprint() {
     const key = 'bb_joyland_fp';
     let fp = localStorage.getItem(key);
     if (!fp) {
-        fp = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).substring(2)}`;
+        fp = globalThis.crypto?.randomUUID
+            ? globalThis.crypto.randomUUID()
+            : `${Date.now()}-${secureRandomToken(12)}`;
         localStorage.setItem(key, fp);
     }
     return fp;

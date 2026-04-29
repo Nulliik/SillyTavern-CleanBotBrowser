@@ -11,7 +11,7 @@ import { importCardToSillyTavern, importCharacterFile } from './modules/services
 import { showCardDetail, closeDetailModal, showImageLightbox } from './modules/modals/detail.js';
 import { createCardBrowser, refreshCardGrid } from './modules/browser.js';
 import { getOriginalMenuHTML, createBottomActions } from './modules/templates/templates.js';
-import { escapeHTML, sanitizeImageUrl } from './modules/utils/utils.js';
+import { escapeHTML, sanitizeImageUrl, secureRandomInt } from './modules/utils/utils.js';
 import { searchJannyCharacters, transformJannyCard, JANNYAI_TAGS } from './modules/services/jannyApi.js';
 import { fetchJannyCollections, fetchJannyCollectionDetails } from './modules/services/jannyCollectionsApi.js';
 import { createCollectionCardHTML, createCollectionsBrowserHeader } from './modules/templates/templates.js';
@@ -80,6 +80,7 @@ import {
     fetchSakuraFavorites, fetchCrushonLikes
 } from './modules/services/authManager.js';
 import { loadFavoriteCreatorsFeed, checkFavoriteCreatorUpdates } from './modules/services/favoriteCreators.js';
+import { antiSlopDefaults } from './modules/services/antiSlop.js';
 
 // Extension version (from manifest.json)
 const EXTENSION_VERSION = '1.0';
@@ -221,6 +222,7 @@ const defaultSettings = {
     autoClearFilters: true,
     randomServices: getDefaultRandomServiceSettings(),
     favoriteCreatorPings: true,
+    ...antiSlopDefaults,
 };
 
 // Stats storage
@@ -679,6 +681,8 @@ async function navigateToSources() {
 
     const menu = document.getElementById('bot-browser-menu');
     if (!menu) return;
+
+    state.recentlyViewed = loadRecentlyViewed(extensionName, extension_settings);
 
     const menuContent = menu.querySelector('.bot-browser-content');
     menuContent.innerHTML = getOriginalMenuHTML(state.recentlyViewed);
@@ -1961,7 +1965,7 @@ function getEnabledRandomServiceIds() {
 function shuffleRandomServices(serviceNames) {
     const shuffled = [...serviceNames];
     for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
+        const j = secureRandomInt(i + 1);
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
     return shuffled;
@@ -2012,7 +2016,7 @@ async function loadRandomCardsForService(selectedService) {
     if (selectedService === 'jannyai') {
         const searchResults = await searchJannyCharacters({
             search: '',
-            page: Math.floor(Math.random() * 10) + 1,
+            page: secureRandomInt(10) + 1,
             limit: 40,
             sort: 'createdAtStamp:desc'
         });
@@ -2021,7 +2025,7 @@ async function loadRandomCardsForService(selectedService) {
     }
 
     if (selectedService === 'chub' && useLiveChubApi) {
-        const randomPage = Math.floor(Math.random() * 50) + 1;
+        const randomPage = secureRandomInt(50) + 1;
         const result = await searchChubCards({
             search: '',
             limit: 48,
@@ -2038,7 +2042,7 @@ async function loadRandomCardsForService(selectedService) {
     }
 
     if (selectedService === 'risuai_realm' && useRisuRealmLiveApi) {
-        const randomPage = Math.floor(Math.random() * 20) + 1;
+        const randomPage = secureRandomInt(20) + 1;
         const result = await searchRisuRealm({
             search: '',
             page: randomPage,
@@ -2053,7 +2057,7 @@ async function loadRandomCardsForService(selectedService) {
     }
 
     if (selectedService === 'pygmalion') {
-        const randomPage = Math.floor(Math.random() * 20) + 1;
+        const randomPage = secureRandomInt(20) + 1;
         const result = await searchPygmalionCharacters({
             query: '',
             page: randomPage,
@@ -2081,7 +2085,7 @@ async function loadRandomCardsForService(selectedService) {
     }
 
     if (selectedService === 'character_tavern') {
-        const randomPage = Math.floor(Math.random() * 10) + 1;
+        const randomPage = secureRandomInt(10) + 1;
         return await searchCharacterTavern({
             query: '',
             page: randomPage,
@@ -2090,7 +2094,7 @@ async function loadRandomCardsForService(selectedService) {
     }
 
     if (selectedService === 'wyvern') {
-        const randomPage = Math.floor(Math.random() * 10) + 1;
+        const randomPage = secureRandomInt(10) + 1;
         const result = await searchWyvernCharacters({
             search: '',
             page: randomPage,
@@ -2212,6 +2216,13 @@ function setupStandaloneImportBridge() {
 // Show settings modal
 function showSettingsModal() {
     const settings = extension_settings[extensionName];
+    const antiSlopNumberSetting = (id, label, value, description = '', step = 1) => `
+        <div class="bb-anti-slop-number">
+            <label for="${id}">${escapeHTML(label)}</label>
+            <input type="number" id="${id}" step="${escapeHTML(String(step))}" value="${escapeHTML(String(value ?? ''))}">
+            ${description ? `<small>${escapeHTML(description)}</small>` : ''}
+        </div>
+    `;
 
     // Create a completely new modal structure with dedicated classes
     const modalHTML = `
@@ -2236,6 +2247,9 @@ function showSettingsModal() {
                     </button>
                     <button class="bb-settings-tab" data-tab="random">
                         <i class="fa-solid fa-cube"></i> <span>Random</span>
+                    </button>
+                    <button class="bb-settings-tab" data-tab="anti-slop">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> <span>Anti-Slop</span>
                     </button>
                     <button class="bb-settings-tab" data-tab="api">
                         <i class="fa-solid fa-cloud"></i> <span>API</span>
@@ -2376,6 +2390,112 @@ function showSettingsModal() {
                                     `;
                                 }).join('')}
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- ANTI-SLOP TAB -->
+                    <div class="bb-settings-tab-content" data-content="anti-slop">
+                        <div class="bb-setting-group">
+                            <label><i class="fa-solid fa-wand-magic-sparkles"></i> Anti-Slop Quality Filter</label>
+                            <small>Scores low-effort cards across sources. Dim mode keeps flagged cards visible; hide mode removes them from the grid.</small>
+                        </div>
+
+                        <div class="bb-setting-group">
+                            <label class="bb-checkbox">
+                                <input type="checkbox" id="bb-setting-anti-slop-enabled" ${settings.antiSlopEnabled ? 'checked' : ''}>
+                                <span>Enable Anti-Slop</span>
+                            </label>
+                        </div>
+
+                        <div class="bb-anti-slop-grid">
+                            <div class="bb-setting-group">
+                                <label>Flagged Card Handling</label>
+                                <select id="bb-setting-anti-slop-mode">
+                                    <option value="dim" ${settings.antiSlopMode !== 'hide' ? 'selected' : ''}>Dim flagged cards</option>
+                                    <option value="hide" ${settings.antiSlopMode === 'hide' ? 'selected' : ''}>Hide flagged cards</option>
+                                </select>
+                            </div>
+                            <div class="bb-setting-group">
+                                <label>Flag Threshold: <span id="bb-anti-slop-threshold-value">${escapeHTML(settings.antiSlopThreshold)}</span></label>
+                                <input type="range" id="bb-setting-anti-slop-threshold" min="1" max="25" step="1" value="${escapeHTML(settings.antiSlopThreshold)}">
+                            </div>
+                        </div>
+
+                        <div class="bb-setting-group">
+                            <label class="bb-checkbox">
+                                <input type="checkbox" id="bb-setting-anti-slop-badges" ${settings.antiSlopShowBadges ? 'checked' : ''}>
+                                <span>Show Anti-Slop Badges</span>
+                            </label>
+                            <small>Shows score badges on cards so you can inspect why something was flagged.</small>
+                        </div>
+
+                        <div class="bb-setting-group">
+                            <label class="bb-checkbox">
+                                <input type="checkbox" id="bb-setting-anti-slop-presets" ${settings.antiSlopUseSourcePresets !== false ? 'checked' : ''}>
+                                <span>Use Source Presets</span>
+                            </label>
+                            <small>Applies tuned adjustments for Chub, JannyAI, Harpy, and Sakura.</small>
+                        </div>
+
+                        <div class="bb-setting-group">
+                            <label class="bb-checkbox">
+                                <input type="checkbox" id="bb-setting-anti-slop-always-labels" ${settings.antiSlopAlwaysShowLabels ? 'checked' : ''}>
+                                <span>Always Show Anti-Slop Labels</span>
+                            </label>
+                        </div>
+
+                        <div class="bb-setting-group">
+                            <label>Preset Weight: <span id="bb-anti-slop-preset-weight-value">${escapeHTML(Number(settings.antiSlopPresetWeight).toFixed(1))}x</span></label>
+                            <input type="range" id="bb-setting-anti-slop-preset-weight" min="0" max="2" step="0.1" value="${escapeHTML(settings.antiSlopPresetWeight)}">
+                            <small>0 disables source preset influence; 1 keeps the default strength.</small>
+                        </div>
+
+                        <div class="bb-setting-group">
+                            <label>Penalty Heuristics</label>
+                            <div class="bb-anti-slop-number-grid">
+                                ${antiSlopNumberSetting('bb-setting-anti-slop-min-tokens', 'Min Tokens', settings.antiSlopMinTokens, 'Cards below this token count get a low-token penalty.')}
+                                ${antiSlopNumberSetting('bb-setting-anti-slop-low-token-score', 'Low Token Score', settings.antiSlopLowTokenScore)}
+                                ${antiSlopNumberSetting('bb-setting-anti-slop-max-tokens', 'Max Tokens', settings.antiSlopMaxTokens, 'Cards above this count get a bloated-definition penalty.')}
+                                ${antiSlopNumberSetting('bb-setting-anti-slop-high-token-score', 'High Token Score', settings.antiSlopHighTokenScore)}
+                                ${antiSlopNumberSetting('bb-setting-anti-slop-short-desc-length', 'Short Description Length', settings.antiSlopShortDescriptionLength)}
+                                ${antiSlopNumberSetting('bb-setting-anti-slop-short-desc-score', 'Short Description Score', settings.antiSlopShortDescriptionScore)}
+                                ${antiSlopNumberSetting('bb-setting-anti-slop-empty-desc-score', 'Empty Description Score', settings.antiSlopEmptyDescriptionScore)}
+                                ${antiSlopNumberSetting('bb-setting-anti-slop-no-tags-score', 'No Tags Score', settings.antiSlopNoTagsScore)}
+                                ${antiSlopNumberSetting('bb-setting-anti-slop-few-tags-count', 'Few Tags Count', settings.antiSlopFewTagsCount)}
+                                ${antiSlopNumberSetting('bb-setting-anti-slop-few-tags-score', 'Few Tags Score', settings.antiSlopFewTagsScore)}
+                                ${antiSlopNumberSetting('bb-setting-anti-slop-anon-score', 'Unknown Creator Score', settings.antiSlopAnonymousCreatorScore)}
+                                ${antiSlopNumberSetting('bb-setting-anti-slop-disposable-score', 'Disposable Creator Score', settings.antiSlopDisposableCreatorScore)}
+                                ${antiSlopNumberSetting('bb-setting-anti-slop-missing-greeting-score', 'Missing Greeting Score', settings.antiSlopMissingGreetingScore)}
+                                ${antiSlopNumberSetting('bb-setting-anti-slop-missing-examples-score', 'Missing Examples Score', settings.antiSlopMissingExamplesScore)}
+                                ${antiSlopNumberSetting('bb-setting-anti-slop-min-example-tokens', 'Min Example Tokens', settings.antiSlopMinExampleTokens)}
+                                ${antiSlopNumberSetting('bb-setting-anti-slop-low-example-score', 'Low Example Score', settings.antiSlopLowExampleScore)}
+                                ${antiSlopNumberSetting('bb-setting-anti-slop-long-name-length', 'Long Title Length', settings.antiSlopLongNameLength)}
+                                ${antiSlopNumberSetting('bb-setting-anti-slop-long-name-score', 'Long Title Score', settings.antiSlopLongNameScore)}
+                                ${antiSlopNumberSetting('bb-setting-anti-slop-ratings-score', 'Ratings Hidden Score', settings.antiSlopDisabledRatingsScore)}
+                                ${antiSlopNumberSetting('bb-setting-anti-slop-forked-score', 'Forked Card Score', settings.antiSlopForkedScore, '', 0.5)}
+                                ${antiSlopNumberSetting('bb-setting-anti-slop-image-nsfw-score', 'Explicit Preview Score', settings.antiSlopImageNsfwScore, '', 0.5)}
+                            </div>
+                        </div>
+
+                        <div class="bb-setting-group">
+                            <label>Positive Signals</label>
+                            <div class="bb-anti-slop-number-grid">
+                                ${antiSlopNumberSetting('bb-setting-anti-slop-lorebook-bonus', 'Lorebook Bonus', settings.antiSlopLorebookBonus, '', 0.5)}
+                                ${antiSlopNumberSetting('bb-setting-anti-slop-examples-bonus', 'Examples Bonus', settings.antiSlopExamplesBonus, '', 0.5)}
+                                ${antiSlopNumberSetting('bb-setting-anti-slop-gallery-bonus', 'Gallery Bonus', settings.antiSlopGalleryBonus, '', 0.5)}
+                                ${antiSlopNumberSetting('bb-setting-anti-slop-system-bonus', 'System Prompt Bonus', settings.antiSlopSystemPromptBonus, '', 0.5)}
+                                ${antiSlopNumberSetting('bb-setting-anti-slop-post-history-bonus', 'Post-History Bonus', settings.antiSlopPostHistoryBonus, '', 0.5)}
+                                ${antiSlopNumberSetting('bb-setting-anti-slop-verified-bonus', 'Verified Bonus', settings.antiSlopVerifiedBonus, '', 0.5)}
+                                ${antiSlopNumberSetting('bb-setting-anti-slop-recommended-bonus', 'Featured Bonus', settings.antiSlopRecommendedBonus, '', 0.5)}
+                                ${antiSlopNumberSetting('bb-setting-anti-slop-popular-threshold', 'Favorites Threshold', settings.antiSlopPopularFavoritesThreshold)}
+                                ${antiSlopNumberSetting('bb-setting-anti-slop-popular-bonus', 'Favorites Bonus', settings.antiSlopPopularFavoritesBonus, '', 0.5)}
+                            </div>
+                        </div>
+
+                        <div class="bb-setting-group">
+                            <label>Custom Rules</label>
+                            <textarea id="bb-setting-anti-slop-rules" rows="7" placeholder="4 | Placeholder Bio | text:coming soon&#10;3 | Disposable Creator | creator:user_&#10;-2 | Trusted Source | source:chub, tag:lorebook">${escapeHTML(settings.antiSlopTagRules || '')}</textarea>
+                            <small>One rule per line: score | label | term1, term2. Prefix terms with tag:, text:, creator:, source:, or name:.</small>
                         </div>
                     </div>
 
@@ -2520,6 +2640,14 @@ function showSettingsModal() {
         document.getElementById('bb-cards-per-page-value').textContent = e.target.value;
     });
 
+    document.getElementById('bb-setting-anti-slop-threshold').addEventListener('input', (e) => {
+        document.getElementById('bb-anti-slop-threshold-value').textContent = e.target.value;
+    });
+
+    document.getElementById('bb-setting-anti-slop-preset-weight').addEventListener('input', (e) => {
+        document.getElementById('bb-anti-slop-preset-weight-value').textContent = `${Number(e.target.value).toFixed(1)}x`;
+    });
+
     // Clear buttons
     document.getElementById('bb-clear-recent').addEventListener('click', () => {
         if (confirm('Clear all recently viewed cards?')) {
@@ -2547,6 +2675,11 @@ function showSettingsModal() {
 
     // Save button
     document.getElementById('bb-settings-save').addEventListener('click', () => {
+        const numberSetting = (id, fallback) => {
+            const value = Number(document.getElementById(id)?.value);
+            return Number.isFinite(value) ? value : fallback;
+        };
+
         settings.recentlyViewedEnabled = document.getElementById('bb-setting-recently-viewed').checked;
         settings.maxRecentlyViewed = parseInt(document.getElementById('bb-setting-max-recent').value);
         settings.persistentSearchEnabled = document.getElementById('bb-setting-persistent-search').checked;
@@ -2565,6 +2698,45 @@ function showSettingsModal() {
         settings.useRisuRealmLiveApi = document.getElementById('bb-setting-risurealm-live-api').checked;
         settings.useMlpchagLiveApi = document.getElementById('bb-setting-mlpchag-live-api').checked;
         settings.useWyvernLiveApi = document.getElementById('bb-setting-wyvern-live-api').checked;
+
+        settings.antiSlopEnabled = document.getElementById('bb-setting-anti-slop-enabled').checked;
+        settings.antiSlopMode = document.getElementById('bb-setting-anti-slop-mode').value;
+        settings.antiSlopThreshold = numberSetting('bb-setting-anti-slop-threshold', settings.antiSlopThreshold);
+        settings.antiSlopUseSourcePresets = document.getElementById('bb-setting-anti-slop-presets').checked;
+        settings.antiSlopPresetWeight = numberSetting('bb-setting-anti-slop-preset-weight', settings.antiSlopPresetWeight);
+        settings.antiSlopShowBadges = document.getElementById('bb-setting-anti-slop-badges').checked;
+        settings.antiSlopAlwaysShowLabels = document.getElementById('bb-setting-anti-slop-always-labels').checked;
+        settings.antiSlopMinTokens = numberSetting('bb-setting-anti-slop-min-tokens', settings.antiSlopMinTokens);
+        settings.antiSlopLowTokenScore = numberSetting('bb-setting-anti-slop-low-token-score', settings.antiSlopLowTokenScore);
+        settings.antiSlopMaxTokens = numberSetting('bb-setting-anti-slop-max-tokens', settings.antiSlopMaxTokens);
+        settings.antiSlopHighTokenScore = numberSetting('bb-setting-anti-slop-high-token-score', settings.antiSlopHighTokenScore);
+        settings.antiSlopShortDescriptionLength = numberSetting('bb-setting-anti-slop-short-desc-length', settings.antiSlopShortDescriptionLength);
+        settings.antiSlopShortDescriptionScore = numberSetting('bb-setting-anti-slop-short-desc-score', settings.antiSlopShortDescriptionScore);
+        settings.antiSlopEmptyDescriptionScore = numberSetting('bb-setting-anti-slop-empty-desc-score', settings.antiSlopEmptyDescriptionScore);
+        settings.antiSlopNoTagsScore = numberSetting('bb-setting-anti-slop-no-tags-score', settings.antiSlopNoTagsScore);
+        settings.antiSlopFewTagsCount = numberSetting('bb-setting-anti-slop-few-tags-count', settings.antiSlopFewTagsCount);
+        settings.antiSlopFewTagsScore = numberSetting('bb-setting-anti-slop-few-tags-score', settings.antiSlopFewTagsScore);
+        settings.antiSlopAnonymousCreatorScore = numberSetting('bb-setting-anti-slop-anon-score', settings.antiSlopAnonymousCreatorScore);
+        settings.antiSlopDisposableCreatorScore = numberSetting('bb-setting-anti-slop-disposable-score', settings.antiSlopDisposableCreatorScore);
+        settings.antiSlopMissingGreetingScore = numberSetting('bb-setting-anti-slop-missing-greeting-score', settings.antiSlopMissingGreetingScore);
+        settings.antiSlopMissingExamplesScore = numberSetting('bb-setting-anti-slop-missing-examples-score', settings.antiSlopMissingExamplesScore);
+        settings.antiSlopMinExampleTokens = numberSetting('bb-setting-anti-slop-min-example-tokens', settings.antiSlopMinExampleTokens);
+        settings.antiSlopLowExampleScore = numberSetting('bb-setting-anti-slop-low-example-score', settings.antiSlopLowExampleScore);
+        settings.antiSlopLongNameLength = numberSetting('bb-setting-anti-slop-long-name-length', settings.antiSlopLongNameLength);
+        settings.antiSlopLongNameScore = numberSetting('bb-setting-anti-slop-long-name-score', settings.antiSlopLongNameScore);
+        settings.antiSlopDisabledRatingsScore = numberSetting('bb-setting-anti-slop-ratings-score', settings.antiSlopDisabledRatingsScore);
+        settings.antiSlopForkedScore = numberSetting('bb-setting-anti-slop-forked-score', settings.antiSlopForkedScore);
+        settings.antiSlopImageNsfwScore = numberSetting('bb-setting-anti-slop-image-nsfw-score', settings.antiSlopImageNsfwScore);
+        settings.antiSlopLorebookBonus = numberSetting('bb-setting-anti-slop-lorebook-bonus', settings.antiSlopLorebookBonus);
+        settings.antiSlopExamplesBonus = numberSetting('bb-setting-anti-slop-examples-bonus', settings.antiSlopExamplesBonus);
+        settings.antiSlopGalleryBonus = numberSetting('bb-setting-anti-slop-gallery-bonus', settings.antiSlopGalleryBonus);
+        settings.antiSlopSystemPromptBonus = numberSetting('bb-setting-anti-slop-system-bonus', settings.antiSlopSystemPromptBonus);
+        settings.antiSlopPostHistoryBonus = numberSetting('bb-setting-anti-slop-post-history-bonus', settings.antiSlopPostHistoryBonus);
+        settings.antiSlopVerifiedBonus = numberSetting('bb-setting-anti-slop-verified-bonus', settings.antiSlopVerifiedBonus);
+        settings.antiSlopRecommendedBonus = numberSetting('bb-setting-anti-slop-recommended-bonus', settings.antiSlopRecommendedBonus);
+        settings.antiSlopPopularFavoritesThreshold = numberSetting('bb-setting-anti-slop-popular-threshold', settings.antiSlopPopularFavoritesThreshold);
+        settings.antiSlopPopularFavoritesBonus = numberSetting('bb-setting-anti-slop-popular-bonus', settings.antiSlopPopularFavoritesBonus);
+        settings.antiSlopTagRules = document.getElementById('bb-setting-anti-slop-rules').value;
 
         // Random services
         const randomServices = {};
@@ -2589,6 +2761,8 @@ function showSettingsModal() {
 
         if (state.view === 'browser') {
             refreshCardGrid(state, extensionName, extension_settings, showCardDetailWrapper);
+        } else if (state.view === 'sources') {
+            void navigateToSources();
         }
     });
 

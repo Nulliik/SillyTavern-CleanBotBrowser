@@ -5,6 +5,7 @@
 //   .props.pageProps.serverState.user.authData.authToken
 
 import { proxiedFetch } from './corsProxy.js';
+import { secureRandomInt } from '../utils/utils.js';
 
 const API_BASE = 'https://www.talkie-ai.com';
 const SALT = '987c331b';
@@ -16,8 +17,8 @@ function getTalkieIds() {
     try { ids = JSON.parse(localStorage.getItem(key)); } catch { ids = null; }
     if (!ids || !ids.userId) {
         ids = {
-            userId: String(Math.floor(Math.random() * 9e14) + 1e14),
-            deviceId: String(Math.floor(Math.random() * 9e14) + 1e14),
+            userId: String(secureRandomInt(900000000) + 100000000) + String(secureRandomInt(1000000)).padStart(6, '0'),
+            deviceId: String(secureRandomInt(900000000) + 100000000) + String(secureRandomInt(1000000)).padStart(6, '0'),
         };
         localStorage.setItem(key, JSON.stringify(ids));
     }

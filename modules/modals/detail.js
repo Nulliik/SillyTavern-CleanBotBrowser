@@ -17,7 +17,7 @@ import { transformFullSpicychatCharacter } from '../services/spicychatApi.js';
 import { getTalkieCharacter, transformFullTalkieCharacter } from '../services/talkieApi.js';
 import { buildProxyUrl, PROXY_TYPES, proxiedFetch } from '../services/corsProxy.js';
 import { showLocalCharacterEditor, showLocalLorebookEditor } from './localEditors.js';
-import { getSourceUrl } from '../utils/utils.js';
+import { getSourceUrl, isProxiedUrl } from '../utils/utils.js';
 import {
     isChubLoggedIn, getChubFavoriteIds, getChubFollowsList,
     fetchGalleryImages, fetchFollowsList, fetchFavoriteIds,
@@ -917,17 +917,11 @@ function validateDetailModalImage(detailModal, card) {
     const imageDiv = detailModal.querySelector('.bot-browser-detail-image');
     if (!imageDiv) return;
 
-    const bgImage = imageDiv.style.backgroundImage;
-    if (!bgImage || bgImage === 'none') return;
-
-    // Extract URL from background-image style
-    const urlMatch = bgImage.match(/url\(["']?(.+?)["']?\)/);
-    if (!urlMatch || !urlMatch[1]) return;
-
-    const imageUrl = urlMatch[1];
+    const imageUrl = imageDiv.dataset.imageUrl;
+    if (!imageUrl) return;
 
     // Skip if already proxied
-    if (imageUrl.includes('corsproxy.io') || imageUrl.includes('cors.eu.org') || imageUrl.includes('api.cors.lol') || imageUrl.includes('cors.workers.dev') || imageUrl.startsWith('/proxy/')) {
+    if (isProxiedUrl(imageUrl)) {
         return;
     }
 

@@ -2,6 +2,7 @@
 // Live API for searching characters from realm.risuai.net
 
 import { proxiedFetch } from './corsProxy.js';
+import { htmlToPlainText } from '../utils/utils.js';
 
 const RISU_BASE_URL = 'https://realm.risuai.net';
 const RISU_DATA_URL = `${RISU_BASE_URL}/__data.json`;
@@ -430,17 +431,7 @@ export async function fetchRisuRealmCreatorProfile(username) {
 
 function stripHtml(html) {
     if (!html) return '';
-
-    return String(html)
-        .replace(/<[^>]*>/g, ' ')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/\s+/g, ' ')
-        .trim();
+    return htmlToPlainText(html);
 }
 
 /**

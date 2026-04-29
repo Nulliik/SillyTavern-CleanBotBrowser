@@ -1,5 +1,6 @@
 const CHUB_GATEWAY_BASE = 'https://gateway.chub.ai';
 import { proxiedFetch } from './corsProxy.js';
+import { secureRandomToken } from '../utils/utils.js';
 
 const DEBUG = typeof window !== 'undefined' && window.__BOT_BROWSER_DEBUG === true;
 
@@ -109,7 +110,7 @@ export async function searchChubCards(options = {}) {
 export async function getChubCharacter(fullPath) {
     // Use the gateway API which has the full definition data
     // Add cache-busting parameter to always get the latest version
-    const nocache = Math.random().toString().substring(2);
+    const nocache = secureRandomToken(8);
     const response = await proxiedFetch(`https://gateway.chub.ai/api/characters/${fullPath}?full=true&nocache=${nocache}`, {
         service: 'chub_public',
         fetchOptions: {
@@ -383,7 +384,7 @@ export async function searchChubLorebooks(options = {}) {
  * @returns {Promise<Object|null>} Full lorebook data or null if unavailable
  */
 export async function getChubLorebook(nodeId) {
-    const nocache = Math.random().toString().substring(2);
+    const nocache = secureRandomToken(8);
     const repoUrl = `${CHUB_GATEWAY_BASE}/api/v4/projects/${nodeId}/repository/files/raw%252Fsillytavern_raw.json/raw?ref=main&response_type=blob&nocache=0.${nocache}`;
 
     try {

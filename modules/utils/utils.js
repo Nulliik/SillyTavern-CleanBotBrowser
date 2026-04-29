@@ -35,28 +35,83 @@ export function escapeHTML(text) {
         .replace(/'/g, '&#039;');
 }
 
+export function decodeHtmlEntities(text) {
+    if (!text) return '';
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = String(text);
+    return textarea.value;
+}
+
+export function htmlToPlainText(html) {
+    if (!html) return '';
+    const template = document.createElement('template');
+    template.innerHTML = String(html);
+    return (template.content.textContent || '').replace(/\s+/g, ' ').trim();
+}
+
+export function parseHttpUrl(url) {
+    if (!url) return null;
+    try {
+        const parsed = new URL(String(url).trim());
+        return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed : null;
+    } catch {
+        return null;
+    }
+}
+
+export function hostnameMatches(url, allowedHosts = []) {
+    const parsed = parseHttpUrl(url);
+    if (!parsed) return false;
+    const hostname = parsed.hostname.toLowerCase();
+    return allowedHosts.some((host) => {
+        const normalized = String(host || '').toLowerCase();
+        return hostname === normalized || hostname.endsWith(`.${normalized}`);
+    });
+}
+
+export function isProxiedUrl(url) {
+    const parsed = parseHttpUrl(url);
+    if (!parsed) return String(url || '').startsWith('/proxy/');
+    return hostnameMatches(parsed.href, ['corsproxy.io', 'cors.eu.org', 'api.cors.lol', 'cors.workers.dev'])
+        || parsed.pathname.startsWith('/proxy/');
+}
+
+function randomBytes(length) {
+    const bytes = new Uint8Array(Math.max(0, length));
+    globalThis.crypto?.getRandomValues?.(bytes);
+    return bytes;
+}
+
+export function secureRandomInt(maxExclusive) {
+    const max = Math.floor(Number(maxExclusive));
+    if (!Number.isFinite(max) || max <= 0) return 0;
+
+    const limit = 0x100000000 - (0x100000000 % max);
+    const bytes = new Uint32Array(1);
+    do {
+        globalThis.crypto?.getRandomValues?.(bytes);
+    } while (bytes[0] >= limit);
+    return bytes[0] % max;
+}
+
+export function secureRandomToken(byteLength = 16) {
+    return Array.from(randomBytes(byteLength), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
 export function sanitizeImageUrl(url) {
     if (!url) return '';
     let trimmed = String(url).trim();
 
-    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) return '';
+    if (!parseHttpUrl(trimmed)) return '';
 
     // Strip existing CORS proxy wrappers, then validate the final URL again.
-    if (trimmed.includes('corsproxy.io/?url=')) {
-        const match = trimmed.match(/corsproxy\.io\/\?url=(.+)/);
-        if (match) trimmed = decodeURIComponent(match[1]);
-    } else if (trimmed.includes('api.cors.lol/?url=')) {
-        const match = trimmed.match(/api\.cors\.lol\/\?url=(.+)/);
-        if (match) trimmed = decodeURIComponent(match[1]);
-    } else if (trimmed.includes('cors.eu.org/https://') || trimmed.includes('cors.eu.org/http://')) {
-        const match = trimmed.match(/cors\.eu\.org\/(https?:\/\/.+)$/);
-        if (match) trimmed = match[1];
-    } else if (trimmed.includes('corsproxy.io/?')) {
-        const afterProxy = trimmed.split('corsproxy.io/?')[1];
-        if (afterProxy) trimmed = afterProxy.replace(/^url=/, '');
-    } else if (trimmed.includes('cors.workers.dev/?')) {
-        const afterProxy = trimmed.split('cors.workers.dev/?')[1];
-        if (afterProxy) trimmed = afterProxy;
+    const proxied = parseHttpUrl(trimmed);
+    if (proxied && hostnameMatches(proxied.href, ['corsproxy.io', 'api.cors.lol', 'cors.workers.dev'])) {
+        const target = proxied.searchParams.get('url') || proxied.search.slice(1);
+        if (target) trimmed = target;
+    } else if (proxied && hostnameMatches(proxied.href, ['cors.eu.org'])) {
+        const target = proxied.pathname.replace(/^\/+/, '');
+        if (parseHttpUrl(target)) trimmed = target;
     }
 
     try {
@@ -107,7 +162,7 @@ export function extractCardProperties(fullCard) {
     const exampleMessages = fullCard.example_messages || fullCard.mes_example || '';
 
     let imageUrl = fullCard.avatar_url || fullCard.image_url || '';
-    if (imageUrl.includes('realm.risuai.net') && fullCard.avatar_url) {
+    if (hostnameMatches(imageUrl, ['realm.risuai.net']) && fullCard.avatar_url) {
         imageUrl = fullCard.avatar_url;
     }
 

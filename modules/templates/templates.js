@@ -18,13 +18,25 @@ export function createCardHTML(card) {
     const cardId = escapeHTML(card.id || '');
     const isNsfw = card.possibleNsfw ? 'true' : 'false';
     const imageClass = safeImageUrl ? 'has-image' : 'image-load-failed';
+    const antiSlopScore = typeof card.antiSlopScore === 'number' ? card.antiSlopScore : null;
+    const antiSlopReasons = [
+        ...(Array.isArray(card.antiSlopReasons) ? card.antiSlopReasons : []),
+        ...(Array.isArray(card.antiSlopMatchedRules) ? card.antiSlopMatchedRules : []),
+    ];
+    const antiSlopTitle = antiSlopReasons.length > 0
+        ? `Anti-Slop score ${antiSlopScore >= 0 ? '+' : ''}${antiSlopScore}: ${antiSlopReasons.join('; ')}`
+        : `Anti-Slop score ${antiSlopScore >= 0 ? '+' : ''}${antiSlopScore}`;
+    const antiSlopBadge = antiSlopScore !== null
+        ? `<div class="bot-browser-anti-slop-badge ${card.antiSlopFlagged ? 'flagged' : 'clean'}" title="${escapeHTML(antiSlopTitle)}">AS ${antiSlopScore >= 0 ? '+' : ''}${escapeHTML(String(antiSlopScore))}</div>`
+        : '';
 
     return `
-        <div class="bot-browser-card-thumbnail" data-card-id="${cardId}" data-nsfw="${isNsfw}">
+        <div class="bot-browser-card-thumbnail ${card.antiSlopFlagged ? 'anti-slop-flagged' : ''} ${card.antiSlopFlagged && card.antiSlopDimmed ? 'anti-slop-dimmed' : ''}" data-card-id="${cardId}" data-nsfw="${isNsfw}">
             <div class="bot-browser-card-checkbox" title="Select card">
                 <i class="fa-solid fa-check"></i>
             </div>
             ${card.is_own ? '<div class="bot-browser-own-badge" title="Your character"><i class="fa-solid fa-user"></i></div>' : ''}
+            ${antiSlopBadge}
             <div class="bot-browser-card-image ${imageClass}">
                 ${safeImageUrl ? `
                     <img
