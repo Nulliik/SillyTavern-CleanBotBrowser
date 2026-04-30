@@ -5,8 +5,8 @@
     "optional": [],
     "js": "src/index.js",
     "css": "src/styles/main.css",
-    "author": "Cleaned local copy",
-    "version": "1.0",
+    "author": "",
+    "version": "1.0.1",
     "homePage": "",
-    "description": "Cleaned build with remote archive and updater disabled, plus safe in-page full-screen mode."
+    "description": "WIP BotBrowser fork."
 }

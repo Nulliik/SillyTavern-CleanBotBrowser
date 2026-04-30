@@ -88,7 +88,7 @@ import { loadFavoriteCreatorsFeed, checkFavoriteCreatorUpdates } from './service
 import { antiSlopDefaults } from './services/antiSlop.js';
 
 // Extension version (from manifest.json)
-const EXTENSION_VERSION = '1.0';
+const EXTENSION_VERSION = '1.0.1';
 
 // Extension name and settings
 const extensionName = 'CleanBotBrowser';
@@ -697,7 +697,7 @@ async function navigateToSources() {
     state.recentlyViewed = loadRecentlyViewed(extensionName, extension_settings);
 
     const menuContent = menu.querySelector('.bot-browser-content');
-    menuContent.innerHTML = getOriginalMenuHTML(state.recentlyViewed);
+    menuContent.innerHTML = getOriginalMenuHTML(state.recentlyViewed, EXTENSION_VERSION);
 
     // Add bottom action buttons to each tab content
     const tabContents = menuContent.querySelectorAll('.bot-browser-tab-content');
@@ -3075,7 +3075,7 @@ function createCleanBotBrowserMenu(options = {}) {
 
     const menuContent = document.createElement('div');
     menuContent.className = 'bot-browser-content';
-    menuContent.innerHTML = getOriginalMenuHTML(state.recentlyViewed);
+    menuContent.innerHTML = getOriginalMenuHTML(state.recentlyViewed, EXTENSION_VERSION);
 
     // Add bottom action buttons to each tab content
     const tabContents = menuContent.querySelectorAll('.bot-browser-tab-content');
