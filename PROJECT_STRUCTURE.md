@@ -5,6 +5,7 @@ CleanBotBrowser is organized around the extension runtime first:
 ```text
 .
 ├── manifest.json              # SillyTavern extension metadata and entry points
+├── style.css                  # Compatibility stylesheet that imports src/styles/main.css
 ├── README.md                  # User-facing overview
 ├── PROJECT_STRUCTURE.md       # Maintainer map of the repository
 ├── src/
@@ -16,8 +17,7 @@ CleanBotBrowser is organized around the extension runtime first:
 │   ├── storage/               # Persistent settings, bookmarks, stats
 │   ├── utils/                 # Shared utilities and text preparation helpers
 │   └── data/                  # Data normalization helpers
-├── assets/images/             # Local extension images and service icons
-└── demo/browser.html          # Standalone safe-shell preview
+└── assets/images/             # Local extension images and service icons
 ```
 
 ## Where To Put New Code
@@ -30,4 +30,4 @@ CleanBotBrowser is organized around the extension runtime first:
 - Add small, side-effect-free helpers in `src/utils/`.
 - Add images and icons under `assets/images/`.
 
-`manifest.json` points SillyTavern at `src/index.js` and `src/styles/main.css`, so root-level JavaScript and CSS files are intentionally avoided.
+`manifest.json` points SillyTavern at `src/index.js` and `src/styles/main.css`. The root `style.css` is kept as a compatibility wrapper for SillyTavern loaders that request the conventional stylesheet path.

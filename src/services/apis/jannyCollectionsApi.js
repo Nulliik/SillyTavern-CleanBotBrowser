@@ -1,6 +1,6 @@
 // JannyAI Collections API - fetches and parses collections via CORS proxy
 import { proxiedFetch, PROXY_TYPES } from '../corsProxy.js';
-import { decodeHtmlEntities, htmlToPlainText } from '../../utils/utils.js';
+import { htmlToPlainText } from '../../utils/utils.js';
 
 const JANNY_COLLECTIONS_URL = 'https://jannyai.com/collections';
 const JANNY_IMAGE_BASE = 'https://image.jannyai.com/bot-avatars/';
@@ -95,7 +95,7 @@ export async function fetchJannyCollections(options = {}) {
 }
 
 function stripHtmlComments(text) {
-    if (typeof DOMParser === 'undefined') return String(text || '');
+    if (typeof DOMParser === 'undefined') return '';
     const doc = new DOMParser().parseFromString(String(text || ''), 'text/html');
     const walker = document.createTreeWalker(doc, NodeFilter.SHOW_COMMENT);
     const comments = [];
@@ -116,6 +116,12 @@ function normalizeJannyImageUrl(url) {
     if (/^https?:\/\//i.test(value)) return value;
     if (value.startsWith('/')) return `https://jannyai.com${value}`;
     return value;
+}
+
+function normalizeHtmlText(value) {
+    return htmlToPlainText(value)
+        .replace(/\s+/g, ' ')
+        .trim();
 }
 
 function parseCollectionsPageWithDom(html, currentPage, sort, totalEntries, totalPages) {
@@ -154,13 +160,13 @@ function parseCollectionsPageWithDom(html, currentPage, sort, totalEntries, tota
             id: pathParts[1],
             slug: pathParts[2],
             fullPath,
-            name: decodeHtmlEntities(titleWithoutCount) || 'Collection',
-            description: decodeHtmlEntities(descriptionNode?.textContent?.trim() || ''),
+            name: normalizeHtmlText(titleWithoutCount) || 'Collection',
+            description: normalizeHtmlText(descriptionNode?.textContent || ''),
             characterCount: countMatch ? parseInt(countMatch[1], 10) : 0,
             lastUpdated: dateMatch ? dateMatch[1] : '',
             creator: {
                 username: getAttributeValue(creatorLink, 'href').replace(/^https:\/\/jannyai\.com/i, '').replace(/^\/collectors\//, ''),
-                name: decodeHtmlEntities(creatorLink?.textContent?.trim() || 'Unknown'),
+                name: normalizeHtmlText(creatorLink?.textContent || 'Unknown'),
                 avatar: normalizeJannyImageUrl(getAttributeValue(creatorAvatar, 'src')),
             },
             views: viewsMatch ? parseInt(viewsMatch[1].replace(/,/g, ''), 10) : 0,
@@ -206,10 +212,10 @@ function parseCollectionCharactersWithDom(cleanHtml) {
         const img = link.querySelector('img[src*="image.jannyai.com"]');
         const h5 = link.querySelector('h5');
         const altName = getAttributeValue(img, 'alt').replace(/^Avatar of\s+/i, '');
-        const name = decodeHtmlEntities((h5?.textContent || altName || charSlug.replace(/^character-/, '').replace(/-/g, ' ')).trim());
+        const name = normalizeHtmlText(h5?.textContent || altName || charSlug.replace(/^character-/, '').replace(/-/g, ' '));
         const avatarUrl = normalizeJannyImageUrl(getAttributeValue(img, 'src'));
         const tags = Array.from(link.querySelectorAll('li span'))
-            .map((tag) => decodeHtmlEntities(tag.textContent?.trim() || '').replace(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]\s*/u, '').trim())
+            .map((tag) => normalizeHtmlText(tag.textContent || '').replace(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]\s*/u, '').trim())
             .filter(Boolean);
 
         characters.push({
@@ -257,9 +263,8 @@ function parseCollectionsPage(html, currentPage, sort) {
 
     while ((linkMatch = collectionLinkRegex.exec(html)) !== null) {
         const fullPath = linkMatch[1];
-        const name = htmlToPlainText(linkMatch[2].replace(/<!--[\s\S]*?-->/g, ''))
+        const name = normalizeHtmlText(linkMatch[2])
             .replace(/\(\s*\d+\s*characters?\s*\)/i, '')
-            .replace(/\s+/g, ' ')
             .trim();
 
         // Extract collection ID and slug from path like "e8dfcb5f-40ce-45da-8dda-a3e0b294a853_favourite--977"
@@ -282,7 +287,7 @@ function parseCollectionsPage(html, currentPage, sort) {
 
         // Parse description
         const descMatch = collectionSection.match(/<p class="mt-4 text-sm text-gray-500[^"]*">([^<]+)<\/p>/);
-        const description = descMatch ? decodeHtmlEntities(descMatch[1].trim()) : '';
+        const description = descMatch ? normalizeHtmlText(descMatch[1]) : '';
 
         // Parse last updated date
         const dateMatch = collectionSection.match(/Last updated:\s*(?:<!--[^>]*-->)?\s*(\d{1,2}\/\d{1,2}\/\d{4})/);
@@ -291,7 +296,7 @@ function parseCollectionsPage(html, currentPage, sort) {
         // Parse creator info
         const creatorMatch = collectionSection.match(/href="\/collectors\/([^"]+)"[^>]*class="hyperlink">([^<]+)<\/a>/);
         const creatorUsername = creatorMatch ? creatorMatch[1] : '';
-        const creatorName = creatorMatch ? decodeHtmlEntities(creatorMatch[2].trim()) : 'Unknown';
+        const creatorName = creatorMatch ? normalizeHtmlText(creatorMatch[2]) : 'Unknown';
 
         // Parse creator avatar
         const creatorAvatarMatch = collectionSection.match(/<img class="h-6 w-6 rounded-full"[^>]*src="([^"]+)"/);
@@ -453,20 +458,18 @@ function parseCollectionDetailsPage(html, collectionId, slug) {
         : (h1Match
             ? htmlToPlainText(h1Match[1])
             : (titleMatch ? titleMatch[1] : ''));
-    const collectionName = decodeHtmlEntities(
+    const collectionName = normalizeHtmlText(
         rawCollectionName
             .replace(/\s+-\s+JannyAI$/i, '')
             .replace(/^Collection\s+/i, '')
-            .replace(/\s+/g, ' ')
-            .trim()
     ) || 'Collection';
 
     const creatorBlockMatch = cleanHtml.match(/<img[^>]*src="([^"]+)"[^>]*>\s*<span>by<\/span>\s*<a href="\/collectors\/([^"]+)"[^>]*class="hyperlink">([^<]+)<\/a>/i);
     const creatorMatch = cleanHtml.match(/href="\/collectors\/([^"]+)"[^>]*class="hyperlink">([^<]+)<\/a>/i);
     const creatorUsername = creatorBlockMatch ? creatorBlockMatch[2] : (creatorMatch ? creatorMatch[1] : '');
     const creatorName = creatorBlockMatch
-        ? decodeHtmlEntities(creatorBlockMatch[3].trim())
-        : (creatorMatch ? decodeHtmlEntities(creatorMatch[2].trim()) : '');
+        ? normalizeHtmlText(creatorBlockMatch[3])
+        : (creatorMatch ? normalizeHtmlText(creatorMatch[2]) : '');
     const creatorAvatar = creatorBlockMatch ? creatorBlockMatch[1] : '';
     const lastUpdatedMatch = cleanHtml.match(/Last updated:\s*(\d{1,2}\/\d{1,2}\/\d{4})/i);
     const lastUpdated = lastUpdatedMatch ? lastUpdatedMatch[1] : '';
@@ -499,12 +502,12 @@ function parseCollectionDetailsPage(html, collectionId, slug) {
         let name = '';
         const h5Match = cardContent.match(/<h5[^>]*class="[^"]*font-bold[^"]*"[^>]*>([^<]+)<\/h5>/);
         if (h5Match) {
-            name = decodeHtmlEntities(h5Match[1].trim());
+            name = normalizeHtmlText(h5Match[1]);
         } else {
             // Fallback: try alt attribute from img
             const altMatch = cardContent.match(/alt="Avatar of ([^"]+)"/);
             if (altMatch) {
-                name = decodeHtmlEntities(altMatch[1].trim());
+                name = normalizeHtmlText(altMatch[1]);
             } else {
                 // Last resort: use slug without "character-" prefix
                 name = charSlug.replace(/^character-/, '').replace(/-/g, ' ');
@@ -523,7 +526,7 @@ function parseCollectionDetailsPage(html, collectionId, slug) {
         const tagRegex = /<li[^>]*>[\s\S]*?<span[^>]*class="[^"]*text-xs[^"]*"[^>]*>([^<]+)<\/span>[\s\S]*?<\/li>/g;
         let tagMatch;
         while ((tagMatch = tagRegex.exec(cardContent)) !== null) {
-            const tagText = decodeHtmlEntities(tagMatch[1].trim());
+            const tagText = normalizeHtmlText(tagMatch[1]);
             // Remove emoji prefix if present (e.g., "🔞 NSFW" -> "NSFW")
             const cleanTag = tagText.replace(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]\s*/u, '').trim();
             if (cleanTag && cleanTag.length > 0) {

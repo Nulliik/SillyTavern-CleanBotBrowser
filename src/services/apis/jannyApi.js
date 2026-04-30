@@ -361,7 +361,7 @@ function parseJannyCreatorProfile(html, creatorId, creatorName = '') {
 
     return {
         creatorId: String(creatorId || '').trim(),
-        creatorName: String(titleMatch?.[1] || ogTitleMatch?.[1] || creatorName || '').trim(),
+        creatorName: stripHtml(titleMatch?.[1] || ogTitleMatch?.[1] || creatorName || ''),
         avatarUrl: String(imageMatch?.[1] || '').trim(),
         url: String(canonicalMatch?.[1] || getJannyCreatorUrl(creatorId, creatorName)).trim(),
         characterRefs,
@@ -777,13 +777,21 @@ function parseAstroCharacterProps(html) {
 }
 
 function parseAstroCharacterIsland(html) {
-    const astroMatch = html.match(/astro-island[^>]*component-export="CharacterButtons"[^>]*props="([^"]+)"/);
+    let propsEncoded = '';
 
-    if (!astroMatch) {
+    if (typeof DOMParser !== 'undefined') {
+        try {
+            const doc = new DOMParser().parseFromString(String(html || ''), 'text/html');
+            propsEncoded = doc.querySelector('astro-island[component-export="CharacterButtons"]')?.getAttribute('props') || '';
+        } catch {
+            propsEncoded = '';
+        }
+    }
+
+    if (!propsEncoded) {
         throw new Error('Could not find character data in JannyAI page');
     }
 
-    const propsEncoded = astroMatch[1];
     const propsDecoded = decodeHtmlEntities(propsEncoded);
 
     let propsJson;

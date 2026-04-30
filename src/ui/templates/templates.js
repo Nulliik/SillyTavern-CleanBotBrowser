@@ -651,11 +651,13 @@ export function createCollectionCardHTML(collection) {
     const collectionName = escapeHTML(collection.name);
     const creatorName = collection.creator?.name ? escapeHTML(collection.creator.name) : '';
     const description = escapeHTML(collection.description || '').substring(0, 100);
+    const collectionId = escapeHTML(collection.id || '');
+    const collectionSlug = escapeHTML(collection.slug || '');
     const characterCount = collection.characterCount || 0;
     const views = collection.views || 0;
 
     return `
-        <div class="bot-browser-collection-card" data-collection-id="${collection.id}" data-collection-slug="${collection.slug}">
+        <div class="bot-browser-collection-card" data-collection-id="${collectionId}" data-collection-slug="${collectionSlug}">
             <div class="bot-browser-collection-previews">
                 ${previewImages.slice(0, 5).map(img => `
                     <img class="bot-browser-collection-preview-img" src="${sanitizeImageUrl(img)}" alt="preview" loading="lazy" decoding="async" referrerpolicy="no-referrer">

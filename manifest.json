@@ -3,10 +3,10 @@
     "loading_order": 100,
     "requires": [],
     "optional": [],
-    "js": "index.js",
-    "css": "style.css",
-    "author": "",
+    "js": "src/index.js",
+    "css": "src/styles/main.css",
+    "author": "Cleaned local copy",
     "version": "1.0",
     "homePage": "",
-    "description": "WIP BotBrowser fork."
+    "description": "Cleaned build with remote archive and updater disabled, plus safe in-page full-screen mode."
 }

@@ -35,6 +35,19 @@ export function escapeHTML(text) {
         .replace(/'/g, '&#039;');
 }
 
+export function sanitizeCardHtml(text) {
+    if (!text) return '';
+    return escapeHTML(text);
+}
+
+function getDOMPurify() {
+    const DOMPurify = globalThis.SillyTavern?.libs?.DOMPurify;
+    if (!DOMPurify?.sanitize) {
+        throw new Error('CleanBotBrowser requires SillyTavern.libs.DOMPurify');
+    }
+    return DOMPurify;
+}
+
 export function decodeHtmlEntities(text) {
     if (!text) return '';
     const namedEntities = {
@@ -63,10 +76,13 @@ export function decodeHtmlEntities(text) {
 
 export function htmlToPlainText(html) {
     if (!html) return '';
-    if (typeof DOMParser === 'undefined') return String(html).replace(/\s+/g, ' ').trim();
-    const doc = new DOMParser().parseFromString(String(html), 'text/html');
-    doc.querySelectorAll('script, style, iframe, object, embed, link, meta, base').forEach((element) => element.remove());
-    return (doc.body?.textContent || '').replace(/\s+/g, ' ').trim();
+    const decoded = decodeHtmlEntities(String(html));
+    const sanitized = getDOMPurify().sanitize(decoded, {
+        ALLOWED_TAGS: [],
+        ALLOWED_ATTR: [],
+        KEEP_CONTENT: true,
+    });
+    return decodeHtmlEntities(sanitized).replace(/\s+/g, ' ').trim();
 }
 
 export function parseHttpUrl(url) {
@@ -173,7 +189,7 @@ export function formatMetadataForDisplay(metadata) {
     }
 
     const trimmed = String(text || '').trim();
-    return trimmed ? escapeHTML(trimmed) : null;
+    return trimmed ? sanitizeCardHtml(trimmed) : null;
 }
 
 export function extractCardProperties(fullCard) {

@@ -844,8 +844,14 @@ async function ensurePolybuzzGuestExpandedSearchResults(search, targetCount, opt
 }
 
 function extractNuxtScriptPayload(html) {
-    const match = String(html || '').match(/<script[^>]+id=["']__NUXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
-    return match?.[1] || '';
+    if (typeof DOMParser === 'undefined') return '';
+
+    try {
+        const doc = new DOMParser().parseFromString(String(html || ''), 'text/html');
+        return doc.getElementById('__NUXT_DATA__')?.textContent || '';
+    } catch {
+        return '';
+    }
 }
 
 function decodeNuxtPayload(payloadText) {
