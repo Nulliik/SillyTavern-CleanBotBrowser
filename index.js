@@ -1901,6 +1901,7 @@ function setupSourceButtons(menu) {
                     const isCharacterTavern = sourceName === 'character_tavern';
                     const isMlpchag = sourceName === 'mlpchag';
                     const isWyvern = sourceName === 'wyvern' || sourceName === 'wyvern_lorebooks';
+                    const isAnchorhold = sourceName === 'anchorhold';
                     const useLiveCharacterTavernApi = extension_settings[extensionName].useCharacterTavernLiveApi !== false;
                     const useLiveMlpchagApi = extension_settings[extensionName].useMlpchagLiveApi !== false;
                     const useWyvernLiveApi = extension_settings[extensionName].useWyvernLiveApi !== false;
@@ -1914,11 +1915,13 @@ function setupSourceButtons(menu) {
                         useLive = useLiveMlpchagApi;
                     } else if (isWyvern) {
                         useLive = useWyvernLiveApi;
+                    } else if (isAnchorhold) {
+                        useLive = true;
                     }
 
                     // For live APIs, pass persisted filters to API (including advanced filters)
                     let loadOptions = {};
-                    if ((isChubService || isCharacterTavern || isWyvern) && useLive) {
+                    if ((isChubService || isCharacterTavern || isWyvern || isAnchorhold) && useLive) {
                         const autoClear = extension_settings[extensionName].autoClearFilters !== false;
                         const persistedSearch = autoClear ? null : loadPersistentSearch(extensionName, extension_settings, sourceName);
                         const sortBy = persistedSearch?.sortBy || extension_settings[extensionName].defaultSortBy || 'relevance';

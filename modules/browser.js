@@ -3,7 +3,7 @@ import { debounce, escapeHTML } from './utils/utils.js';
 import { createBrowserHeader, createCardGrid, createCardHTML, createBottomActions, createBulkActionBar } from './templates/templates.js';
 import { getAllTags, getAllCreators, filterCards, sortCards, deduplicateCards, validateCardImages } from './services/cards.js';
 import { loadPersistentSearch, savePersistentSearch, loadSearchCollapsed, saveSearchCollapsed } from './storage/storage.js';
-import { loadMoreChubCards, loadMoreChubLorebooks, getChubApiState, getChubLorebooksApiState, resetChubApiState, loadServiceIndex, getCharacterTavernApiState, resetCharacterTavernState, loadMoreCharacterTavernCards, getWyvernApiState, getWyvernLorebooksApiState, resetWyvernApiState, resetWyvernLorebooksApiState, loadMoreWyvernCards, loadMoreWyvernLorebooksWrapper } from './services/cache.js';
+import { loadMoreChubCards, loadMoreChubLorebooks, getChubApiState, getChubLorebooksApiState, resetChubApiState, loadServiceIndex, getCharacterTavernApiState, resetCharacterTavernState, loadMoreCharacterTavernCards, getWyvernApiState, getWyvernLorebooksApiState, resetWyvernApiState, resetWyvernLorebooksApiState, loadMoreWyvernCards, loadMoreWyvernLorebooksWrapper, getAnchorholdApiState, loadMoreAnchorholdCards } from './services/cache.js';
 import { searchWyvernCharacters, searchWyvernLorebooks, transformWyvernCard, transformWyvernLorebook } from './services/wyvernApi.js';
 import { searchJannyCharacters, transformJannyCard } from './services/jannyApi.js';
 import { searchCharacterTavern } from './services/characterTavernApi.js';
@@ -38,6 +38,8 @@ let jannyApiState = {
     lastSearch: '',
     lastSort: ''
 };
+
+const ANCHORHOLD_BROWSER_PAGE_SIZE = 20;
 
 export function resetJannyApiState() {
     jannyApiState = {
@@ -90,15 +92,11 @@ async function loadCardsUntilTarget({ state, extensionName, extension_settings, 
             });
 
             if (newCards.length > 0) {
-                // Deduplicate new cards against existing ones
-                const existingIds = new Set(state.currentCards.map(c => c.id).filter(Boolean));
-                const uniqueNewCards = newCards.filter(c => !c.id || !existingIds.has(c.id));
-                state.currentCards.push(...uniqueNewCards);
-
-                // Apply client-side filters and append
-                const filteredNewCards = applyClientSideFilters(uniqueNewCards, state, extensionName, extension_settings);
-                state.filteredCards.push(...filteredNewCards);
-                totalLoaded += filteredNewCards.length;
+                const beforeCount = state.filteredCards.length;
+                state.currentCards = deduplicateCards([...state.currentCards, ...newCards]);
+                state.fuse = state.filters.search ? new Fuse(state.currentCards, state.fuseOptions) : null;
+                state.filteredCards = sortCards(applyClientSideFilters(state.currentCards, state, extensionName, extension_settings), state.sortBy);
+                totalLoaded += Math.max(0, state.filteredCards.length - beforeCount);
 
                 // Update cached tags/creators
                 state.cachedTags = getAllTags(state.currentCards);
@@ -136,6 +134,11 @@ function applyClientSideFilters(cards, state, extensionName, extension_settings)
     console.log(`[CleanBotBrowser] applyClientSideFilters: ${cards.length} input -> ${filtered.length} after blocklist/NSFW -> ${cardsWithImages.length} after image filter`);
 
     return cardsWithImages;
+}
+
+function getBrowserCardsPerPage(state, extensionName, extension_settings) {
+    if (state?.isAnchorhold) return ANCHORHOLD_BROWSER_PAGE_SIZE;
+    return extension_settings[extensionName].cardsPerPage || 200;
 }
 
 export async function createCardBrowser(serviceName, cards, state, extensionName, extension_settings, showCardDetailFunc) {
@@ -194,6 +197,8 @@ export async function createCardBrowser(serviceName, cards, state, extensionName
 
     state.isTalkie = serviceName === 'talkie' || cards.some(c => c.isTalkie || c.service === 'talkie');
     if (state.isTalkie && serviceName === 'talkie') resetTalkieState();
+
+    state.isAnchorhold = serviceName === 'anchorhold' || cards.some(c => c.sourceService === 'anchorhold_live');
 
     // Detect if this is Character Tavern with live API enabled
     const useCharacterTavernLiveApi = extension_settings[extensionName].useCharacterTavernLiveApi === true;
@@ -356,11 +361,11 @@ export async function createCardBrowser(serviceName, cards, state, extensionName
     // Store filtered cards for pagination
     state.filteredCards = cardsWithImages;
     state.currentPage = 1;
-    state.totalPages = Math.ceil(cardsWithImages.length / (extension_settings[extensionName].cardsPerPage || 200));
+    const cardsPerPage = getBrowserCardsPerPage(state, extensionName, extension_settings);
+    state.totalPages = Math.ceil(cardsWithImages.length / cardsPerPage);
 
     // For live Chub API: if initial filtered cards are less than cardsPerPage, load more pages
     // This fixes the issue where filtering removes most cards leaving only 1-5 visible initially
-    const cardsPerPage = extension_settings[extensionName].cardsPerPage || 200;
     if (state.isLiveChub && state.filteredCards.length < cardsPerPage) {
         const apiState = state.isLorebooks ? getChubLorebooksApiState() : getChubApiState();
         const loadMoreFunc = state.isLorebooks ? loadMoreChubLorebooks : loadMoreChubCards;
@@ -375,6 +380,25 @@ export async function createCardBrowser(serviceName, cards, state, extensionName
         });
 
         state.totalPages = Math.ceil(state.filteredCards.length / cardsPerPage);
+    }
+
+    if (state.isAnchorhold && state.filteredCards.length < cardsPerPage) {
+        const apiState = getAnchorholdApiState();
+        await loadCardsUntilTarget({
+            state,
+            extensionName,
+            extension_settings,
+            targetCount: cardsPerPage,
+            loadMoreFunc: loadMoreAnchorholdCards,
+            apiState
+        });
+    }
+
+    if (state.isAnchorhold) {
+        const apiState = getAnchorholdApiState();
+        state.totalPages = apiState.hasMore
+            ? Math.max(1, Math.floor(state.filteredCards.length / cardsPerPage))
+            : Math.max(1, Math.ceil(state.filteredCards.length / cardsPerPage));
     }
 
     const serviceDisplayName = serviceName === 'all' ? 'All Sources' :
@@ -1995,7 +2019,7 @@ function renderPage(state, menuContent, showCardDetailFunc, extensionName, exten
     const gridContainer = menuContent.querySelector('.bot-browser-card-grid');
     if (!gridContainer) return;
 
-    const cardsPerPage = extension_settings[extensionName].cardsPerPage || 200;
+    const cardsPerPage = getBrowserCardsPerPage(state, extensionName, extension_settings);
 
     // Calculate which cards to show
     const startIndex = (state.currentPage - 1) * cardsPerPage;
@@ -2009,6 +2033,7 @@ function renderPage(state, menuContent, showCardDetailFunc, extensionName, exten
     const chubApiState = state.isLorebooks ? getChubLorebooksApiState() : getChubApiState();
     const ctApiState = getCharacterTavernApiState();
     const wyvernApiState = state.isWyvernLorebooks ? getWyvernLorebooksApiState() : getWyvernApiState();
+    const anchorholdApiState = getAnchorholdApiState();
 
     let paginationHTML;
     if (state.isJannyAITrending) {
@@ -2055,6 +2080,12 @@ function renderPage(state, menuContent, showCardDetailFunc, extensionName, exten
         paginationHTML = createChubPaginationHTML(1, spicychatApiState.hasMore, false);
     } else if (state.isTalkie) {
         paginationHTML = createChubPaginationHTML(1, talkieApiState.hasMore, false);
+    } else if (state.isAnchorhold) {
+        const nextPageStart = state.currentPage * cardsPerPage;
+        const nextPageEnd = nextPageStart + cardsPerPage;
+        const hasFullCachedNextPage = state.filteredCards.length >= nextPageEnd;
+        const hasFinalPartialNextPage = !anchorholdApiState.hasMore && state.filteredCards.length > nextPageStart;
+        paginationHTML = createChubPaginationHTML(state.currentPage || 1, anchorholdApiState.hasMore, hasFullCachedNextPage || hasFinalPartialNextPage);
     } else {
         paginationHTML = createPaginationHTML(state.currentPage, state.totalPages);
     }
@@ -2133,6 +2164,8 @@ function renderPage(state, menuContent, showCardDetailFunc, extensionName, exten
         setupSpicychatPaginationListeners(gridContainer, state, menuContent, showCardDetailFunc, extensionName, extension_settings);
     } else if (state.isTalkie) {
         setupTalkiePaginationListeners(gridContainer, state, menuContent, showCardDetailFunc, extensionName, extension_settings);
+    } else if (state.isAnchorhold) {
+        setupAnchorholdPaginationListeners(gridContainer, state, menuContent, showCardDetailFunc, extensionName, extension_settings);
     } else {
         setupPaginationListeners(gridContainer, state, menuContent, showCardDetailFunc, extensionName, extension_settings);
     }
@@ -2179,7 +2212,7 @@ function setupChubPaginationListeners(gridContainer, state, menuContent, showCar
     const pagination = gridContainer.querySelector('.bot-browser-pagination');
     if (!pagination) return;
 
-    const cardsPerPage = extension_settings[extensionName].cardsPerPage || 200;
+    const cardsPerPage = getBrowserCardsPerPage(state, extensionName, extension_settings);
 
     pagination.querySelectorAll('.bot-browser-pagination-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
@@ -2230,6 +2263,98 @@ function setupChubPaginationListeners(gridContainer, state, menuContent, showCar
                     btn.disabled = false;
                     btn.innerHTML = 'Next <i class="fa-solid fa-angle-right"></i>';
                 }
+            }
+        });
+    });
+}
+
+function setupAnchorholdPaginationListeners(gridContainer, state, menuContent, showCardDetailFunc, extensionName, extension_settings) {
+    const pagination = gridContainer.querySelector('.bot-browser-pagination');
+    if (!pagination) return;
+
+    const cardsPerPage = getBrowserCardsPerPage(state, extensionName, extension_settings);
+    const apiState = getAnchorholdApiState();
+    const hasReadyNextPage = () => {
+        const nextPageStart = state.currentPage * cardsPerPage;
+        const nextPageEnd = nextPageStart + cardsPerPage;
+        return state.filteredCards.length >= nextPageEnd || (!apiState.hasMore && state.filteredCards.length > nextPageStart);
+    };
+
+    pagination.querySelectorAll('.bot-browser-pagination-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const action = btn.dataset.action;
+
+            if (action === 'prev' && state.currentPage > 1) {
+                btn.disabled = true;
+                state.currentPage--;
+                console.log(`[CleanBotBrowser] Anchorhold UI page back -> ${state.currentPage} (${state.filteredCards.length} cached filtered cards)`);
+                renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
+                return;
+            }
+
+            if (action !== 'next') return;
+
+            const nextPageStart = state.currentPage * cardsPerPage;
+
+            if (hasReadyNextPage()) {
+                btn.disabled = true;
+                state.currentPage++;
+                console.log(`[CleanBotBrowser] Anchorhold UI page cached forward -> ${state.currentPage} (${state.filteredCards.length} cached filtered cards)`);
+                renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
+                return;
+            }
+
+            if (!apiState.hasMore || apiState.isLoading) return;
+
+            btn.disabled = true;
+
+            try {
+                const maxRemoteBatches = 5;
+                let fetchedBatches = 0;
+                let addedCards = 0;
+
+                while (!hasReadyNextPage() && apiState.hasMore && fetchedBatches < maxRemoteBatches) {
+                    fetchedBatches++;
+                    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Loading ${fetchedBatches}/${maxRemoteBatches}...`;
+
+                    const cards = await loadMoreAnchorholdCards({
+                        search: state.filters.search,
+                        creatorQuery: state.filters.creator,
+                        sort: state.sortBy,
+                        hideNsfw: extension_settings[extensionName].hideNsfw,
+                    });
+
+                    if (cards.length > 0) {
+                        const beforeCount = state.currentCards.length;
+                        state.currentCards = deduplicateCards([...state.currentCards, ...cards]);
+                        addedCards += Math.max(0, state.currentCards.length - beforeCount);
+                        state.fuse = state.filters.search ? new Fuse(state.currentCards, state.fuseOptions) : null;
+                        state.filteredCards = sortCards(applyClientSideFilters(state.currentCards, state, extensionName, extension_settings), state.sortBy);
+                        state.totalPages = apiState.hasMore
+                            ? Math.max(1, Math.floor(state.filteredCards.length / cardsPerPage))
+                            : Math.max(1, Math.ceil(state.filteredCards.length / cardsPerPage));
+                        updateCachedFiltersAndDropdowns(state, menuContent);
+                    }
+
+                    if (cards.length === 0 && !apiState.hasMore) break;
+                }
+
+                if (hasReadyNextPage()) {
+                    state.currentPage++;
+                    console.log(`[CleanBotBrowser] Anchorhold UI page fetched forward -> ${state.currentPage} (${state.filteredCards.length} cached filtered cards, ${fetchedBatches} remote batches, ${addedCards} unique raw cards added)`);
+                    renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
+                } else if (!apiState.hasMore) {
+                    toastr.info('No more Anchorhold cards available');
+                    renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
+                } else {
+                    toastr.info('Still looking for more cards with safe preview images');
+                    renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
+                }
+            } catch (error) {
+                console.error('[CleanBotBrowser] Failed to load more Anchorhold cards:', error);
+                toastr.error('Failed to load more Anchorhold cards');
+                btn.disabled = false;
+                btn.innerHTML = 'Next <i class="fa-solid fa-angle-right"></i>';
             }
         });
     });
@@ -3175,7 +3300,8 @@ export function refreshCardGrid(state, extensionName, extension_settings, showCa
     // Store filtered cards and reset to page 1
     state.filteredCards = cardsWithImages;
     state.currentPage = 1;
-    state.totalPages = Math.ceil(cardsWithImages.length / (extension_settings[extensionName].cardsPerPage || 200));
+    const cardsPerPage = getBrowserCardsPerPage(state, extensionName, extension_settings);
+    state.totalPages = Math.ceil(cardsWithImages.length / cardsPerPage);
 
     const menuContent = document.querySelector('.bot-browser-content');
     const countContainer = document.querySelector('.bot-browser-results-count');

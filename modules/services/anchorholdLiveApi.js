@@ -3,17 +3,82 @@ import { extractCharacterDataFromPngArrayBuffer } from './embeddedCardParser.js'
 
 const ANCHORHOLD_BASE_URL = 'https://partyintheanchorhold.neocities.org';
 const ANCHORHOLD_CONFIG_URL = `${ANCHORHOLD_BASE_URL}/config.json`;
-const ANCHORHOLD_PROXY_CHAIN = [PROXY_TYPES.CORS_EU_ORG, PROXY_TYPES.CORSPROXY_IO, PROXY_TYPES.CORS_LOL, PROXY_TYPES.PUTER];
-const ANCHORHOLD_ARTIFACT_PROXY_CHAIN = [PROXY_TYPES.NONE, PROXY_TYPES.CORS_EU_ORG, PROXY_TYPES.CORSPROXY_IO, PROXY_TYPES.CORS_LOL, PROXY_TYPES.PUTER];
+const ANCHORHOLD_PROXY_CHAIN = [PROXY_TYPES.SILLYTAVERN, PROXY_TYPES.CORS_EU_ORG, PROXY_TYPES.CORSPROXY_IO, PROXY_TYPES.CORS_LOL, PROXY_TYPES.PUTER];
+const ANCHORHOLD_ARTIFACT_PROXY_CHAIN = [PROXY_TYPES.SILLYTAVERN, PROXY_TYPES.CORS_EU_ORG, PROXY_TYPES.CORSPROXY_IO, PROXY_TYPES.CORS_LOL, PROXY_TYPES.PUTER];
 const ANCHORHOLD_ARTIFACT_TIMEOUT_MS = 3000;
-const ANCHORHOLD_PAGE_SIZE = 24;
+export const ANCHORHOLD_PAGE_SIZE = 24;
 const ANCHORHOLD_CACHE_TTL = 5 * 60 * 1000;
+const ANCHORHOLD_MAX_ARTIFACT_BYTES = 8 * 1024 * 1024;
+const ANCHORHOLD_ALLOWED_ARTIFACT_HOSTS = new Set([
+    'files.catbox.moe',
+    'litter.catbox.moe',
+    'qu.ax',
+    'file.garden',
+]);
+const ANCHORHOLD_ALLOWED_PROVIDER_IMAGE_HOSTS = new Set([
+    'avatars.charhub.io',
+    'cards.character-tavern.com',
+    'image.jannyai.com',
+    'ella.janitorai.com',
+    'sv.risuai.xyz',
+    'cdn.saucepan.ai',
+    'cdn.nd-api.com',
+    'botbooru.com',
+    'backyard.ai',
+    'app.wyvern.chat',
+    'server.pygmalion.chat',
+    'api.sakura.fm',
+]);
+const ANCHORHOLD_ALLOWED_PROVIDER_LINK_HOSTS = new Set([
+    'chub.ai',
+    'character-tavern.com',
+    'charactertavern.com',
+    'realm.risuai.net',
+    'app.wyvern.chat',
+    'wyvern.chat',
+    'sakura.fm',
+    'saucepan.ai',
+    'crushon.ai',
+    'harpy.chat',
+    'jannyai.com',
+    'caibotlist.com',
+    'backyard.ai',
+    'pygmalion.chat',
+    'botify.ai',
+    'joyland.ai',
+    'www.joyland.ai',
+    'talkie-ai.com',
+    'www.talkie-ai.com',
+]);
 
 let cachedConfig = null;
 let cachedConfigAt = 0;
 const pageCardCache = new Map();
 const embeddedCardMetadataCache = new Map();
 const embeddedCardMetadataInflight = new Map();
+export const anchorholdApiState = {
+    page: 1,
+    nextPage: 1,
+    hasMore: true,
+    isLoading: false,
+    lastSearch: '',
+    lastCreatorQuery: '',
+    lastSort: 'newest',
+    totalPages: 0,
+    totalBots: 0,
+};
+
+export function resetAnchorholdApiState() {
+    anchorholdApiState.page = 1;
+    anchorholdApiState.nextPage = 1;
+    anchorholdApiState.hasMore = true;
+    anchorholdApiState.isLoading = false;
+    anchorholdApiState.lastSearch = '';
+    anchorholdApiState.lastCreatorQuery = '';
+    anchorholdApiState.lastSort = 'newest';
+    anchorholdApiState.totalPages = 0;
+    anchorholdApiState.totalBots = 0;
+}
 
 function trimText(value) {
     return String(value || '').trim();
@@ -49,6 +114,14 @@ function normalizeComparableUrl(value) {
     }
 }
 
+function normalizeComparableText(value) {
+    return trimText(value)
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .replace(/[^\p{L}\p{N}]+/gu, ' ')
+        .trim();
+}
+
 function compactText(value) {
     return trimText(value)
         .replace(/\r/g, '')
@@ -62,7 +135,6 @@ function shortPreview(value, maxLength = 260) {
     if (!text) return '';
     if (text.length <= maxLength) return text;
     return `${text.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
-    return `${text.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
 }
 
 function humanizeSlug(value) {
@@ -93,8 +165,85 @@ function toIsoUtc(value) {
 function isImageUrl(value) {
     const url = trimText(value).toLowerCase();
     if (!url) return false;
-    if (url.startsWith('data:image/')) return true;
-    return /\.(png|jpe?g|webp|gif|bmp|svg|avif)([?#].*)?$/i.test(url);
+    return /\.(png|jpe?g|webp)([?#].*)?$/i.test(url);
+}
+
+function getUrlHostname(value) {
+    try {
+        return new URL(trimText(value)).hostname.replace(/^www\./, '').toLowerCase();
+    } catch {
+        return '';
+    }
+}
+
+function isAllowedAnchorholdArtifactUrl(value) {
+    const text = trimText(value);
+    if (!text) return false;
+
+    try {
+        const parsed = new URL(text);
+        const hostname = parsed.hostname.replace(/^www\./, '').toLowerCase();
+        if (!ANCHORHOLD_ALLOWED_ARTIFACT_HOSTS.has(hostname)) return false;
+        return /\.(png|json)([?#].*)?$/i.test(parsed.pathname);
+    } catch {
+        return false;
+    }
+}
+
+function isSafeAnchorholdPreviewImageUrl(value) {
+    const text = trimText(value);
+    if (!isImageUrl(text)) return false;
+    const hostname = getUrlHostname(text);
+    return ANCHORHOLD_ALLOWED_PROVIDER_IMAGE_HOSTS.has(hostname);
+}
+
+function isTrustedAnchorholdLink(value) {
+    const text = trimText(value);
+    if (!/^https?:\/\//i.test(text)) return false;
+    const hostname = getUrlHostname(text);
+    return ANCHORHOLD_ALLOWED_PROVIDER_LINK_HOSTS.has(hostname)
+        || ANCHORHOLD_ALLOWED_PROVIDER_IMAGE_HOSTS.has(hostname)
+        || ANCHORHOLD_ALLOWED_ARTIFACT_HOSTS.has(hostname)
+        || isCardviewHost(hostname);
+}
+
+function safePreviewImageList(values) {
+    return dedupeStrings(values).filter(isSafeAnchorholdPreviewImageUrl);
+}
+
+function getPostPreviewImage(postInfo, linkIndex = 0) {
+    const safeImages = safePreviewImageList([
+        postInfo?.imageLinks?.[linkIndex],
+        postInfo?.imageLinks?.[0],
+        postInfo?.renderedImageUrl,
+    ].filter(Boolean));
+    return safeImages[0] || '';
+}
+
+function isLikelyHtmlPayload(text) {
+    return /^\s*(?:<!doctype\s+html|<html|<script|<svg)\b/i.test(String(text || ''));
+}
+
+function getBytesKind(buffer) {
+    const bytes = new Uint8Array(buffer || new ArrayBuffer(0));
+    if (bytes.length >= 8
+        && bytes[0] === 0x89
+        && bytes[1] === 0x50
+        && bytes[2] === 0x4e
+        && bytes[3] === 0x47
+        && bytes[4] === 0x0d
+        && bytes[5] === 0x0a
+        && bytes[6] === 0x1a
+        && bytes[7] === 0x0a) return 'png';
+    if (bytes.length >= 12
+        && String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF'
+        && String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP') return 'webp';
+    if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'jpg';
+    if (bytes.length >= 1) {
+        const head = String.fromCharCode(...bytes.slice(0, Math.min(bytes.length, 96))).toLowerCase();
+        if (/<(?:!doctype\s+html|html|script|svg)\b/.test(head)) return 'active-or-html';
+    }
+    return 'unknown';
 }
 
 function isLikelyCardLink(value) {
@@ -117,13 +266,7 @@ function isLikelyCardLink(value) {
         || hostname === 'cardviewer.netlify.app'
     ) return true;
 
-    if (
-        hostname === 'files.catbox.moe'
-        || hostname === 'litter.catbox.moe'
-        || hostname === 'qu.ax'
-        || hostname === 'file.garden'
-        || hostname === 'pomf2.lain.la'
-    ) {
+    if (ANCHORHOLD_ALLOWED_ARTIFACT_HOSTS.has(hostname)) {
         return /\.(png|webp|json|zip|jpg|jpeg)([?#].*)?$/i.test(pathname);
     }
 
@@ -136,6 +279,7 @@ function getAnchorholdFetchOptions(accept) {
         proxyChain: ANCHORHOLD_PROXY_CHAIN,
         fetchOptions: {
             method: 'GET',
+            redirect: 'error',
             headers: { Accept: accept },
         },
     };
@@ -160,6 +304,7 @@ async function fetchAnchorholdArtifactResponse(url) {
         timeoutMs: ANCHORHOLD_ARTIFACT_TIMEOUT_MS,
         fetchOptions: {
             method: 'GET',
+            redirect: 'error',
             headers: {
                 Accept: 'application/octet-stream,image/png,application/json,text/plain,*/*',
             },
@@ -209,12 +354,11 @@ function resolveCardviewArtifactUrl(value) {
     const input = trimText(value);
     if (!input) return '';
 
-    const prefixed = input.match(/^(lb|[pcq]):\s*(.+)$/i);
+    const prefixed = input.match(/^(lb|[cq]):\s*(.+)$/i);
     if (prefixed?.[1] && prefixed?.[2]) {
         const prefix = prefixed[1].toLowerCase();
         const id = trimText(prefixed[2]).replace(/\.png$/i, '');
         if (!id) return '';
-        if (prefix === 'p') return `https://pomf2.lain.la/f/${id}.png`;
         if (prefix === 'c') return `https://files.catbox.moe/${id}.png`;
         if (prefix === 'lb') return `https://litter.catbox.moe/${id}.png`;
         if (prefix === 'q') return `https://qu.ax/x/${id}.png`;
@@ -223,6 +367,8 @@ function resolveCardviewArtifactUrl(value) {
     if (/^https?:\/\//i.test(input)) {
         return resolveCardArtifactUrl(input);
     }
+
+    if (/:/.test(input)) return '';
 
     return `https://files.catbox.moe/${input.replace(/\.png$/i, '')}.png`;
 }
@@ -241,21 +387,24 @@ function resolveCardArtifactUrl(url) {
     const hostname = parsed.hostname.replace(/^www\./, '').toLowerCase();
     const pathname = parsed.pathname || '';
     const segments = pathname.split('/').filter(Boolean);
+    if (hostname && !ANCHORHOLD_ALLOWED_ARTIFACT_HOSTS.has(hostname) && !isCardviewHost(hostname)) {
+        return '';
+    }
 
     if (isCardviewHost(hostname)) {
         return resolveCardviewArtifactUrl(decodeURIComponent(parsed.search.replace(/^\?/, '')));
     }
 
-    if (hostname === 'files.catbox.moe' || hostname === 'litter.catbox.moe') {
-        const last = segments[segments.length - 1] || '';
-        if (!last) return text;
-        return /\.(png|json|webp|jpe?g)$/i.test(last) ? text : `${parsed.origin}/${last}.png`;
+    const lastSegment = segments[segments.length - 1] || '';
+    const prefixedLast = decodeURIComponent(lastSegment).match(/^(lb|[cq]):\s*(.+)$/i);
+    if (prefixedLast?.[1] && prefixedLast?.[2]) {
+        return resolveCardviewArtifactUrl(`${prefixedLast[1]}:${prefixedLast[2]}`);
     }
 
-    if (hostname === 'pomf2.lain.la' || hostname === 'lain.la') {
-        const last = segments[segments.length - 1] || '';
+    if (hostname === 'files.catbox.moe' || hostname === 'litter.catbox.moe') {
+        const last = lastSegment;
         if (!last) return text;
-        return /\.(png|json|webp|jpe?g)$/i.test(last) ? text : `${parsed.origin}${pathname.replace(/\/$/, '')}.png`;
+        return /\.(png|json|webp|jpe?g)$/i.test(last) ? text : `${parsed.origin}/${last}.png`;
     }
 
     if (hostname === 'qu.ax') {
@@ -341,9 +490,17 @@ function parseEntryContent(entry) {
         const line = trimText(rawLine);
         if (!line) continue;
 
-        if (/^https?:\/\//i.test(line)) {
-            if (isImageUrl(line)) imageLinks.push(line);
-            else nonImageLinks.push(line);
+        const urls = [...line.matchAll(/https?:\/\/[^\s<>"')\]]+/gi)]
+            .map((match) => trimText(match[0].replace(/[.,;:!?]+$/g, '')))
+            .filter(isTrustedAnchorholdLink);
+
+        if (urls.length > 0) {
+            for (const url of urls) {
+                if (isImageUrl(url)) imageLinks.push(url);
+                else nonImageLinks.push(url);
+            }
+            const bodyLine = compactText(urls.reduce((text, url) => text.replace(url, ''), line).replace(/\s+/g, ' '));
+            if (bodyLine && !/^https?:\/\//i.test(bodyLine)) bodyLines.push(bodyLine);
             continue;
         }
 
@@ -609,6 +766,7 @@ export async function fetchEmbeddedCardMetadata(url) {
 
     const resolvedUrl = resolveCardArtifactUrl(originalUrl);
     if (!resolvedUrl) return null;
+    if (!isAllowedAnchorholdArtifactUrl(resolvedUrl)) return null;
 
     const cacheKey = resolvedUrl.toLowerCase();
     if (embeddedCardMetadataCache.has(cacheKey)) {
@@ -630,9 +788,13 @@ export async function fetchEmbeddedCardMetadata(url) {
             let payload = null;
 
             if (contentType.includes('json') || /\.json([?#].*)?$/i.test(lowerResolved)) {
-                payload = await response.json().catch(() => null);
+                const text = await response.text().catch(() => '');
+                if (!text || text.length > ANCHORHOLD_MAX_ARTIFACT_BYTES || isLikelyHtmlPayload(text)) return null;
+                payload = JSON.parse(text);
             } else {
                 const buffer = await response.arrayBuffer();
+                if (!buffer || buffer.byteLength > ANCHORHOLD_MAX_ARTIFACT_BYTES) return null;
+                if (getBytesKind(buffer) !== 'png') return null;
                 payload = extractCharacterDataFromPngArrayBuffer(buffer);
             }
 
@@ -654,7 +816,11 @@ export async function fetchEmbeddedCardMetadata(url) {
     })();
 
     embeddedCardMetadataInflight.set(cacheKey, pending);
-    return await pending;
+    const result = await pending;
+    if (!embeddedCardMetadataCache.has(cacheKey)) {
+        embeddedCardMetadataCache.set(cacheKey, result || null);
+    }
+    return result;
 }
 
 export function getCachedEmbeddedCardMetadata(url) {
@@ -775,7 +941,7 @@ function buildPostMarkdown(summaryText, metadata, externalCardUrl, extraLinks) {
     const previewImages = dedupeStrings([
         metadata.renderedImageUrl,
         ...(Array.isArray(metadata.imageLinks) ? metadata.imageLinks : []),
-    ]).filter(Boolean);
+    ]).filter(isSafeAnchorholdPreviewImageUrl);
 
     if (metadata.postUrl) {
         blocks.push(`**[${postLabel}](${metadata.postUrl})**`);
@@ -822,6 +988,7 @@ function parseProviderUrl(url, fallbackName, fallbackCreator) {
 
     const hostname = parsed.hostname.replace(/^www\./, '').toLowerCase();
     const segments = parsed.pathname.split('/').filter(Boolean).map((part) => decodeURIComponent(part));
+    if (!ANCHORHOLD_ALLOWED_PROVIDER_LINK_HOSTS.has(hostname)) return null;
 
     if (hostname === 'chub.ai' && segments[0] === 'characters' && segments[1] && segments[2]) {
         const creator = segments[1];
@@ -1057,14 +1224,20 @@ function buildAnchorholdCanonicalKey(card) {
     const postId = trimText(card?._anchorholdPostId);
     const creator = trimText(card?.creator).toLowerCase();
     const name = trimText(card?.name).toLowerCase();
+    const normalizedName = normalizeComparableText(card?.name);
+    const normalizedCreator = normalizeComparableText(card?.creator);
 
     if (service && fullPath) return `${service}:fullPath:${fullPath.toLowerCase()}`;
     if (service && path) return `${service}:path:${path.toLowerCase()}`;
     if (service && recordId && service !== 'anchorhold_live') return `${service}:id:${recordId.toLowerCase()}`;
+    if (postId && downloadUrl) return `anchorhold:post-download:${postId}:${downloadUrl}`;
+    if (postId && externalCardUrl) return `anchorhold:post-url:${postId}:${externalCardUrl}`;
     if (externalCardUrl) return `anchorhold:url:${externalCardUrl}`;
     if (downloadUrl) return `anchorhold:download:${downloadUrl}`;
     if (cardUrl && !/partyintheanchorhold\.neocities\.org/i.test(cardUrl)) return `anchorhold:view:${cardUrl}`;
     if (postId && name) return `anchorhold:post:${postId}:${name}`;
+    if (normalizedName && normalizedCreator && normalizedCreator !== 'unknown') return `anchorhold:name:${normalizedCreator}:${normalizedName}`;
+    if (normalizedName) return `anchorhold:name:${normalizedName}`;
     if (name && creator) return `anchorhold:name:${creator}:${name}`;
     if (postId) return `anchorhold:post:${postId}`;
     return '';
@@ -1106,7 +1279,7 @@ function preferAnchorholdCard(left, right) {
 }
 
 function buildProviderBackedCard(provider, postInfo, linkIndex, embeddedMeta = null) {
-    const imageUrl = postInfo.imageLinks[linkIndex] || postInfo.imageLinks[0] || postInfo.renderedImageUrl || '';
+    const imageUrl = getPostPreviewImage(postInfo, linkIndex);
     const boardTag = normalizeBoardTag(postInfo.board);
     const tags = dedupeStrings([boardTag, ...(embeddedMeta?.tags || [])]);
     const canonicalName = trimText(provider?.name);
@@ -1132,7 +1305,7 @@ function buildProviderBackedCard(provider, postInfo, linkIndex, embeddedMeta = n
         ].filter(Boolean).join('\n'),
         avatar_url: imageUrl,
         image_url: imageUrl,
-        galleryImages: dedupeStrings([imageUrl, postInfo.renderedImageUrl, ...postInfo.imageLinks]),
+        galleryImages: safePreviewImageList([imageUrl, postInfo.renderedImageUrl, ...postInfo.imageLinks]),
         created_at: postInfo.postedAt,
         updated_at: postInfo.postedAt,
         possibleNsfw: inferNsfwSignal(postInfo.bodyText, postInfo.extraLinks),
@@ -1163,7 +1336,7 @@ function buildProviderBackedCard(provider, postInfo, linkIndex, embeddedMeta = n
 
 function buildWrapperCard(url, postInfo, linkIndex) {
     const fallbackName = inferFallbackName(postInfo, linkIndex);
-    const imageUrl = postInfo.imageLinks[linkIndex] || postInfo.imageLinks[0] || postInfo.renderedImageUrl || '';
+    const imageUrl = getPostPreviewImage(postInfo, linkIndex);
     const boardTag = normalizeBoardTag(postInfo.board);
     const card = {
         id: `${postInfo.postId || 'post'}:${linkIndex}:${url}`,
@@ -1176,7 +1349,7 @@ function buildWrapperCard(url, postInfo, linkIndex) {
         desc_search: [fallbackName, postInfo.bodyText, boardTag, url, ...postInfo.extraLinks.map((entry) => entry.url)].filter(Boolean).join('\n'),
         avatar_url: imageUrl,
         image_url: imageUrl,
-        galleryImages: dedupeStrings([imageUrl, postInfo.renderedImageUrl, ...postInfo.imageLinks]),
+        galleryImages: safePreviewImageList([imageUrl, postInfo.renderedImageUrl, ...postInfo.imageLinks]),
         created_at: postInfo.postedAt,
         updated_at: postInfo.postedAt,
         url: postInfo.postUrl || url,
@@ -1202,7 +1375,7 @@ function buildWrapperCard(url, postInfo, linkIndex) {
 }
 
 function buildExtractedCard(sourceUrl, postInfo, embeddedMeta, linkIndex = 0) {
-    const imageUrl = postInfo.imageLinks[linkIndex] || postInfo.imageLinks[0] || postInfo.renderedImageUrl || embeddedMeta?.resolvedUrl || '';
+    const imageUrl = getPostPreviewImage(postInfo, linkIndex);
     const boardTag = normalizeBoardTag(postInfo.board);
     const tags = dedupeStrings([boardTag, ...(embeddedMeta?.tags || [])]);
     const description = compactText(embeddedMeta?.description || postInfo.bodyText);
@@ -1234,7 +1407,7 @@ function buildExtractedCard(sourceUrl, postInfo, embeddedMeta, linkIndex = 0) {
         ].filter(Boolean).join('\n'),
         avatar_url: imageUrl,
         image_url: imageUrl,
-        galleryImages: dedupeStrings([imageUrl, embeddedMeta?.resolvedUrl, postInfo.renderedImageUrl, ...postInfo.imageLinks]),
+        galleryImages: safePreviewImageList([imageUrl, postInfo.renderedImageUrl, ...postInfo.imageLinks]),
         created_at: postInfo.postedAt,
         updated_at: postInfo.postedAt,
         url: postInfo.postUrl || externalCardUrl || embeddedMeta?.resolvedUrl || '',
@@ -1335,6 +1508,7 @@ async function extractCardsFromPost(postEl, options = {}) {
         const recognized = providerLinks.filter((item) => item.provider);
         const extraLinks = dedupeStrings(nonImageLinks)
             .filter((href) => !recognized.some((item) => item.href === href))
+            .filter(isTrustedAnchorholdLink)
             .map((href) => ({
                 url: href,
                 label: (() => {
@@ -1360,7 +1534,7 @@ async function extractCardsFromPost(postEl, options = {}) {
         const artifactCandidates = dedupeStrings([
             ...imageLinks,
             ...nonImageLinks.map((href) => resolveCardArtifactUrl(href)).filter(Boolean),
-        ]);
+        ]).filter(isAllowedAnchorholdArtifactUrl);
 
         let embeddedMeta = null;
         if (resolveEmbeddedMetadata && artifactCandidates.length > 0) {
@@ -1412,7 +1586,7 @@ async function fetchAnchorholdPageCards(feedPageNumber) {
     const html = await fetchAnchorholdText(`${ANCHORHOLD_BASE_URL}/feed/page_${feedPageNumber}`);
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const posts = Array.from(doc.querySelectorAll('.post'));
-    const cardGroups = await mapWithConcurrency(posts, 4, (post) => extractCardsFromPost(post, { resolveEmbeddedMetadata: false }));
+    const cardGroups = await mapWithConcurrency(posts, 3, (post) => extractCardsFromPost(post, { resolveEmbeddedMetadata: true }));
     const cards = dedupeCards(cardGroups.flatMap((group) => group));
 
     pageCardCache.set(feedPageNumber, cards);
@@ -1454,7 +1628,15 @@ export async function browseAnchorholdLive(options = {}) {
 
     const config = await getAnchorholdConfig();
     const totalPages = Number(config?.totalPages || 0) || 0;
+    anchorholdApiState.totalPages = totalPages;
+    anchorholdApiState.totalBots = Number(config?.totalBots || 0) || 0;
+    anchorholdApiState.lastSearch = trimText(search);
+    anchorholdApiState.lastCreatorQuery = trimText(creatorQuery);
+    anchorholdApiState.lastSort = trimText(sort) || 'newest';
     if (totalPages <= 0) {
+        anchorholdApiState.page = Math.max(1, Number(page) || 1);
+        anchorholdApiState.nextPage = anchorholdApiState.page + 1;
+        anchorholdApiState.hasMore = false;
         return {
             cards: [],
             paging: { hasMore: false, nextPage: Number(page || 1) + 1 },
@@ -1468,7 +1650,7 @@ export async function browseAnchorholdLive(options = {}) {
     const deepScan = !!trimText(search) || !!trimText(creatorQuery);
     const maxScans = Math.min(
         totalPages,
-        deepScan ? Math.max(24, normalizedPage * 24) : Math.max(8, normalizedPage * 6),
+        deepScan ? Math.max(32, normalizedPage * 32) : Math.max(12, normalizedPage * 12),
     );
 
     const collected = [];
@@ -1493,13 +1675,17 @@ export async function browseAnchorholdLive(options = {}) {
         scannedPages += 1;
 
         for (const card of pageCards) {
-            const key = [
-                trimText(card?.service),
-                trimText(card?.fullPath),
-                trimText(card?.path),
-                trimText(card?.id),
-                trimText(card?.externalCardUrl),
-            ].filter(Boolean).join('::');
+            const key = trimText(card?._anchorholdCanonicalKey)
+                || buildAnchorholdCanonicalKey(card)
+                || [
+                    trimText(card?.service),
+                    trimText(card?.fullPath),
+                    trimText(card?.path),
+                    trimText(card?.id),
+                    trimText(card?.externalCardUrl),
+                    trimText(card?.download_url),
+                    trimText(card?._anchorholdPostId),
+                ].filter(Boolean).join('::');
 
             if (!key || seen.has(key)) continue;
             if (hideNsfw && card?.possibleNsfw) continue;
@@ -1519,6 +1705,9 @@ export async function browseAnchorholdLive(options = {}) {
     const hasMore = deepScan
         ? hasBufferedMore
         : (hasBufferedMore || scannedPages < totalPages);
+    anchorholdApiState.page = normalizedPage;
+    anchorholdApiState.nextPage = normalizedPage + 1;
+    anchorholdApiState.hasMore = hasMore;
 
     return {
         cards: collected.slice(offset, offset + limit),

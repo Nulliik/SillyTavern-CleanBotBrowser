@@ -189,7 +189,9 @@ export function deduplicateCards(cards) {
         // Use card ID as primary key if available (most reliable)
         // Fall back to name+creator only when ID is not present
         let key;
-        if (card.id) {
+        if (card._anchorholdCanonicalKey) {
+            key = `anchorhold:${String(card._anchorholdCanonicalKey).toLowerCase().trim()}`;
+        } else if (card.id) {
             key = `id:${card.id}`;
         } else {
             const normalizedName = (card.name || '').toLowerCase().trim();

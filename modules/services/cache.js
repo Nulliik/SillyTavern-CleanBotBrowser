@@ -4,6 +4,7 @@ try { default_avatar = (await import('/script.js')).default_avatar; } catch {}
 
 import { loadQuillgenIndex } from './quillgenApi.js';
 import { secureRandomInt } from '../utils/utils.js';
+import { browseAnchorholdLive, anchorholdApiState, resetAnchorholdApiState, ANCHORHOLD_PAGE_SIZE } from './anchorholdLiveApi.js';
 import { searchCharacterTavern, characterTavernApiState, resetCharacterTavernState } from './characterTavernApi.js';
 import { loadMlpchagLive, clearMlpchagCache, getMlpchagApiState, resetMlpchagState } from './mlpchagApi.js';
 import {
@@ -14,7 +15,6 @@ import {
 } from './wyvernApi.js';
 
 const DISABLED_ARCHIVE_SERVICES = new Set([
-    'anchorhold',
     'catbox',
     'chub',
     'chub_lorebooks',
@@ -60,6 +60,50 @@ export function resetChubApiState() {
     chubApiState.isLoading = false;
     chubApiState.currentSearch = '';
     chubApiState.currentSort = 'download_count';
+}
+
+export function getAnchorholdApiState() {
+    return anchorholdApiState;
+}
+
+export function resetAnchorholdState() {
+    resetAnchorholdApiState();
+}
+
+export async function loadMoreAnchorholdCards(options = {}) {
+    if (anchorholdApiState.isLoading || !anchorholdApiState.hasMore) {
+        return [];
+    }
+
+    anchorholdApiState.isLoading = true;
+
+    try {
+        const requestedPage = Math.max(1, Number(options.page || anchorholdApiState.nextPage || (anchorholdApiState.page + 1)) || 1);
+        console.log(`[CleanBotBrowser] Anchorhold fetching remote batch ${requestedPage} (next=${anchorholdApiState.nextPage}, last=${anchorholdApiState.page})`);
+        const result = await browseAnchorholdLive({
+            page: requestedPage,
+            search: options.search ?? anchorholdApiState.lastSearch,
+            creatorQuery: options.creatorQuery ?? options.creator ?? anchorholdApiState.lastCreatorQuery,
+            sort: options.sort || anchorholdApiState.lastSort || 'newest',
+            hideNsfw: !!options.hideNsfw,
+            limit: options.limit || ANCHORHOLD_PAGE_SIZE,
+        });
+        const cards = Array.isArray(result?.cards) ? result.cards : [];
+        anchorholdApiState.hasMore = !!result?.paging?.hasMore;
+        anchorholdApiState.nextPage = Number(result?.paging?.nextPage || requestedPage + 1) || (requestedPage + 1);
+        console.log(`[CleanBotBrowser] Anchorhold fetched batch ${requestedPage}: ${cards.length} cards, next=${anchorholdApiState.nextPage}, hasMore=${anchorholdApiState.hasMore}`);
+
+        if (!loadedData.serviceIndexes.anchorhold) {
+            loadedData.serviceIndexes.anchorhold = [];
+        }
+        loadedData.serviceIndexes.anchorhold.push(...cards);
+        anchorholdApiState.isLoading = false;
+        return cards;
+    } catch (error) {
+        console.error('[CleanBotBrowser] Failed to load more Anchorhold cards:', error);
+        anchorholdApiState.isLoading = false;
+        return [];
+    }
 }
 
 /**
@@ -295,6 +339,36 @@ export async function loadMoreChubLorebooks(options = {}) {
 }
 
 export async function loadServiceIndex(serviceName, useLiveApi = false, options = {}) {
+    if (serviceName === 'anchorhold') {
+        resetAnchorholdApiState();
+        delete loadedData.serviceIndexes[serviceName];
+
+        try {
+            console.log('[CleanBotBrowser] Loading Anchorhold via live feed');
+            anchorholdApiState.isLoading = true;
+            const result = await browseAnchorholdLive({
+                page: options.page || 1,
+                search: options.search || '',
+                creatorQuery: options.creatorQuery || options.creator || '',
+                sort: options.sort || 'newest',
+                hideNsfw: !!options.hideNsfw,
+                limit: options.limit || ANCHORHOLD_PAGE_SIZE,
+            });
+            const cards = Array.isArray(result?.cards) ? result.cards : [];
+            anchorholdApiState.hasMore = !!result?.paging?.hasMore;
+            anchorholdApiState.nextPage = Number(result?.paging?.nextPage || 2) || 2;
+            anchorholdApiState.isLoading = false;
+            loadedData.serviceIndexes[serviceName] = cards;
+            return cards;
+        } catch (error) {
+            console.error('[CleanBotBrowser] Anchorhold live feed failed:', error);
+            anchorholdApiState.isLoading = false;
+            anchorholdApiState.hasMore = false;
+            loadedData.serviceIndexes[serviceName] = [];
+            return [];
+        }
+    }
+
     // Handle QuillGen specially - it uses API-based loading
     if (serviceName === 'quillgen') {
         // Return cached data if available
