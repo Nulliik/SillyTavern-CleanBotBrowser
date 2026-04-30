@@ -1,4 +1,5 @@
 import { escapeHTML, sanitizeImageUrl } from '../utils/utils.js';
+import { createServiceIconHTML } from './serviceIcons.js';
 
 export function createCardGrid(cards, initialBatchSize = 50, startIndex = 0) {
     if (cards.length === 0) {
@@ -157,7 +158,7 @@ export function getOriginalMenuHTML(recentlyViewed) {
                 </button>
                 <!-- Live API Sources (sorted by size - largest first) -->
                 <button class="bot-browser-source" data-source="chub">
-                    <div class="bot-browser-source-icon" style="background-image: url('https://avatars.charhub.io/icons/assets/full_logo.png'); background-size: cover; background-position: center; background-repeat: no-repeat; background-color: white;"></div>
+                    ${createServiceIconHTML('chub', { background: '#ffffff' })}
                     <span>Chub</span>
                 </button>
                 <button class="bot-browser-source bot-browser-chub-auth-only" data-source="chub_favorites" style="display:none;">
@@ -173,35 +174,35 @@ export function getOriginalMenuHTML(recentlyViewed) {
                     <span>Timeline</span>
                 </button>
                 <button class="bot-browser-source" data-source="jannyai">
-                    <div class="bot-browser-source-icon" style="background-image: url('https://tse3.mm.bing.net/th/id/OIP.nb-qi0od9W6zRsskVwL6QAHaHa?rs=1&pid=ImgDetMain&o=7&rm=3'); background-size: cover; background-position: center; background-repeat: no-repeat;"></div>
+                    ${createServiceIconHTML('jannyai')}
                     <span>JannyAI</span>
                 </button>
                 <button class="bot-browser-source" data-source="backyard">
-                    <div class="bot-browser-source-icon" style="background-image: url('https://backyard.ai/favicon.png'); background-size: cover; background-position: center; background-repeat: no-repeat;"></div>
+                    ${createServiceIconHTML('backyard')}
                     <span>Backyard.ai</span>
                 </button>
                 <button class="bot-browser-source" data-source="pygmalion">
-                    <div class="bot-browser-source-icon" style="background-image: url('https://pygmalion.chat/icons/apple-touch-icon.png'); background-size: cover; background-position: center; background-repeat: no-repeat;"></div>
+                    ${createServiceIconHTML('pygmalion')}
                     <span>Pygmalion</span>
                 </button>
                 <button class="bot-browser-source" data-source="character_tavern">
-                    <div class="bot-browser-source-icon" style="background-image: url('https://character-tavern.com/_app/immutable/assets/logo.DGIlOnDO.png'); background-size: cover; background-position: center; background-repeat: no-repeat;"></div>
+                    ${createServiceIconHTML('character_tavern')}
                     <span>Character Tavern</span>
                 </button>
                 <button class="bot-browser-source" data-source="wyvern">
-                    <div class="bot-browser-source-icon" style="background-image: url('https://substackcdn.com/image/fetch/w_176,h_176,c_fill,f_webp,q_auto:good,fl_progressive:steep,g_auto/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F6ea09a00-0248-4482-a893-1a2d1e3fe3c1_512x512.png'); background-size: cover; background-position: center; background-repeat: no-repeat;"></div>
+                    ${createServiceIconHTML('wyvern')}
                     <span>Wyvern Chat</span>
                 </button>
                 <button class="bot-browser-source" data-source="mlpchag">
-                    <div class="bot-browser-source-icon" style="background-image: url('https://derpicdn.net/img/view/2015/9/26/988523__safe_solo_upvotes+galore_smiling_cute_derpy+hooves_looking+at+you_looking+up_part+of+a_set_derpibooru+exclusive.png'); background-size: cover; background-position: center; background-repeat: no-repeat;"></div>
+                    ${createServiceIconHTML('mlpchag')}
                     <span>MLPchag</span>
                 </button>
                 <button class="bot-browser-source" data-source="risuai_realm">
-                    <div class="bot-browser-source-icon" style="background-image: url('https://realm.risuai.net/icon.png'); background-size: cover; background-position: center; background-repeat: no-repeat;"></div>
+                    ${createServiceIconHTML('risuai_realm')}
                     <span>Risuai Realm</span>
                 </button>
                 <button class="bot-browser-source" data-source="crushon">
-                    <div class="bot-browser-source-icon" style="background-image: url('https://crushon.ai/favicon-64x64.png'); background-size: cover; background-position: center; background-repeat: no-repeat;"></div>
+                    ${createServiceIconHTML('crushon')}
                     <span>CrushOn.AI</span>
                 </button>
                 <button class="bot-browser-source bb-crushon-auth-only" data-source="crushon_favorites" style="display:none;">
@@ -211,7 +212,7 @@ export function getOriginalMenuHTML(recentlyViewed) {
                     <span>Crushon Likes</span>
                 </button>
                 <button class="bot-browser-source" data-source="sakura">
-                    <div class="bot-browser-source-icon" style="background-image: url('https://sakura.fm/favicon.ico'); background-size: cover; background-position: center; background-repeat: no-repeat; background-color: #1a0a1a;"></div>
+                    ${createServiceIconHTML('sakura', { background: '#1a0a1a' })}
                     <span>Sakura.fm</span>
                 </button>
                 <button class="bot-browser-source bb-sakura-auth-only" data-source="sakura_favorites" style="display:none;">
@@ -221,32 +222,32 @@ export function getOriginalMenuHTML(recentlyViewed) {
                     <span>Sakura Faves</span>
                 </button>
                 <button class="bot-browser-source" data-source="saucepan">
-                    <div class="bot-browser-source-icon" style="background-image: url('https://saucepan.ai/favicon-32x32.png'); background-size: cover; background-position: center; background-repeat: no-repeat;"></div>
+                    ${createServiceIconHTML('saucepan')}
                     <span>Saucepan.ai</span>
                 </button>
                 <button class="bot-browser-source" data-source="botbooru">
-                    <div class="bot-browser-source-icon" style="background-image: url('https://botbooru.com/favicon.ico?v=2'); background-size: cover; background-position: center; background-repeat: no-repeat; background-color: #111827;"></div>
+                    ${createServiceIconHTML('botbooru', { background: '#111827' })}
                     <span>BotBooru</span>
                 </button>
                 <!-- Archive Sources (sorted by size - largest first) -->
                 <button class="bot-browser-source" data-source="catbox">
-                    <div class="bot-browser-source-icon" style="background-image: url('https://catbox.tech/favicon128.png'); background-size: cover; background-position: center; background-repeat: no-repeat;"></div>
+                    ${createServiceIconHTML('catbox')}
                     <span>Catbox</span>
                 </button>
                 <button class="bot-browser-source" data-source="anchorhold">
-                    <div class="bot-browser-source-icon" style="background-image: url('https://assets.coingecko.com/coins/images/30124/large/4CHAN.png?1696529046'); background-size: 85%; background-position: center; background-repeat: no-repeat;"></div>
+                    ${createServiceIconHTML('anchorhold', { size: '85%' })}
                     <span>4chan - /aicg/</span>
                 </button>
                 <button class="bot-browser-source" data-source="desuarchive">
-                    <div class="bot-browser-source-icon" style="background-image: url('https://s2.vndb.org/ch/32/17032.jpg'); background-size: cover; background-position: center; background-repeat: no-repeat;"></div>
+                    ${createServiceIconHTML('desuarchive')}
                     <span>Desuarchive</span>
                 </button>
                 <button class="bot-browser-source" data-source="webring">
-                    <div class="bot-browser-source-icon" style="background-image: url('https://files.catbox.moe/6avrsl.png'); background-size: 85%; background-position: center; background-repeat: no-repeat;"></div>
+                    ${createServiceIconHTML('webring', { size: '85%' })}
                     <span>Webring</span>
                 </button>
                 <button class="bot-browser-source" data-source="nyai_me">
-                    <div class="bot-browser-source-icon" style="background-image: url('https://nyai.me/img/necologofavicon-64.png'); background-size: 85%; background-position: center; background-repeat: no-repeat;"></div>
+                    ${createServiceIconHTML('nyai_me', { size: '85%' })}
                     <span>Nyai.me</span>
                 </button>
             </div>
@@ -261,11 +262,11 @@ export function getOriginalMenuHTML(recentlyViewed) {
                     <span>Your Lorebooks</span>
                 </button>
                 <button class="bot-browser-source" data-source="chub_lorebooks">
-                    <div class="bot-browser-source-icon" style="background-image: url('https://avatars.charhub.io/icons/assets/full_logo.png'); background-size: cover; background-position: center; background-repeat: no-repeat; background-color: white;"></div>
+                    ${createServiceIconHTML('chub', { background: '#ffffff' })}
                     <span>Chub</span>
                 </button>
                 <button class="bot-browser-source" data-source="wyvern_lorebooks">
-                    <div class="bot-browser-source-icon" style="background-image: url('https://substackcdn.com/image/fetch/w_176,h_176,c_fill,f_webp,q_auto:good,fl_progressive:steep,g_auto/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F6ea09a00-0248-4482-a893-1a2d1e3fe3c1_512x512.png'); background-size: cover; background-position: center; background-repeat: no-repeat;"></div>
+                    ${createServiceIconHTML('wyvern')}
                     <span>Wyvern Chat</span>
                 </button>
             </div>
@@ -285,7 +286,7 @@ export function getOriginalMenuHTML(recentlyViewed) {
         <div class="bot-browser-tab-content" data-content="collections">
             <div class="bot-browser-grid">
                 <button class="bot-browser-source" data-source="jannyai_collections">
-                    <div class="bot-browser-source-icon" style="background-image: url('https://tse3.mm.bing.net/th/id/OIP.nb-qi0od9W6zRsskVwL6QAHaHa?rs=1&pid=ImgDetMain&o=7&rm=3'); background-size: cover; background-position: center; background-repeat: no-repeat;"></div>
+                    ${createServiceIconHTML('jannyai')}
                     <span>JannyAI Collections</span>
                 </button>
             </div>
@@ -294,31 +295,31 @@ export function getOriginalMenuHTML(recentlyViewed) {
         <div class="bot-browser-tab-content" data-content="trending">
             <div class="bot-browser-grid">
                 <button class="bot-browser-source" data-source="chub_trending">
-                    <div class="bot-browser-source-icon" style="background-image: url('https://avatars.charhub.io/icons/assets/full_logo.png'); background-size: cover; background-position: center; background-repeat: no-repeat; background-color: white;"></div>
+                    ${createServiceIconHTML('chub', { background: '#ffffff' })}
                     <span>Chub</span>
                 </button>
                 <button class="bot-browser-source" data-source="character_tavern_trending">
-                    <div class="bot-browser-source-icon" style="background-image: url('https://character-tavern.com/_app/immutable/assets/logo.DGIlOnDO.png'); background-size: cover; background-position: center; background-repeat: no-repeat;"></div>
+                    ${createServiceIconHTML('character_tavern')}
                     <span>Character Tavern</span>
                 </button>
                 <button class="bot-browser-source" data-source="wyvern_trending">
-                    <div class="bot-browser-source-icon" style="background-image: url('https://substackcdn.com/image/fetch/w_176,h_176,c_fill,f_webp,q_auto:good,fl_progressive:steep,g_auto/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F6ea09a00-0248-4482-a893-1a2d1e3fe3c1_512x512.png'); background-size: cover; background-position: center; background-repeat: no-repeat;"></div>
+                    ${createServiceIconHTML('wyvern')}
                     <span>Wyvern Chat</span>
                 </button>
                 <button class="bot-browser-source" data-source="backyard_trending">
-                    <div class="bot-browser-source-icon" style="background-image: url('https://backyard.ai/favicon.png'); background-size: cover; background-position: center; background-repeat: no-repeat;"></div>
+                    ${createServiceIconHTML('backyard')}
                     <span>Backyard.ai</span>
                 </button>
                 <button class="bot-browser-source" data-source="pygmalion_trending">
-                    <div class="bot-browser-source-icon" style="background-image: url('https://pygmalion.chat/icons/apple-touch-icon.png'); background-size: cover; background-position: center; background-repeat: no-repeat;"></div>
+                    ${createServiceIconHTML('pygmalion')}
                     <span>Pygmalion</span>
                 </button>
                 <button class="bot-browser-source" data-source="risuai_realm_trending">
-                    <div class="bot-browser-source-icon" style="background-image: url('https://realm.risuai.net/icon.png'); background-size: cover; background-position: center; background-repeat: no-repeat;"></div>
+                    ${createServiceIconHTML('risuai_realm')}
                     <span>RisuRealm</span>
                 </button>
                 <button class="bot-browser-source bot-browser-source-unavailable" data-source="jannyai_trending" title="Trending unavailable - JanitorAI blocks automated access">
-                    <div class="bot-browser-source-icon" style="background-image: url('https://tse3.mm.bing.net/th/id/OIP.nb-qi0od9W6zRsskVwL6QAHaHa?rs=1&pid=ImgDetMain&o=7&rm=3'); background-size: cover; background-position: center; background-repeat: no-repeat;"></div>
+                    ${createServiceIconHTML('jannyai')}
                     <span>JanitorAI/JannyAI</span>
                     <div class="bot-browser-source-unavailable-badge">Unavailable</div>
                 </button>

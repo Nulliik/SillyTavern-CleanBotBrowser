@@ -11,6 +11,7 @@ import { importCardToSillyTavern, importCharacterFile } from './modules/services
 import { showCardDetail, closeDetailModal, showImageLightbox } from './modules/modals/detail.js';
 import { createCardBrowser, refreshCardGrid } from './modules/browser.js';
 import { getOriginalMenuHTML, createBottomActions } from './modules/templates/templates.js';
+import { SERVICE_ICON_URLS } from './modules/templates/serviceIcons.js';
 import { escapeHTML, sanitizeImageUrl, secureRandomInt } from './modules/utils/utils.js';
 import { searchJannyCharacters, transformJannyCard, JANNYAI_TAGS } from './modules/services/jannyApi.js';
 import { fetchJannyCollections, fetchJannyCollectionDetails } from './modules/services/jannyCollectionsApi.js';
@@ -113,92 +114,91 @@ const state = {
 };
 
 // Random service options (used for roulette + settings)
-//#TODO Most likely it will be a better idea to store those locally
 const randomServiceOptions = [
     {
         id: 'risuai_realm',
         name: 'Risuai Realm',
-        iconUrl: 'https://risuai.net/_app/immutable/assets/logo_typo_trans.RA6vyG_G.png',//#TODO replace with correct
+        iconUrl: SERVICE_ICON_URLS.risuai_realm,
         iconSize: 'cover',
     },
     {
         id: 'botbooru',
         name: 'BotBooru',
-        iconUrl: 'https://botbooru.com/favicon.ico?v=2',
+        iconUrl: SERVICE_ICON_URLS.botbooru,
         iconSize: 'cover',
         iconBg: '#111827',
     },
     {
         id: 'webring',
         name: 'Webring',
-        iconUrl: 'https://jannyai.com/logo.png', //#TODO replace with correct
+        iconUrl: SERVICE_ICON_URLS.webring,
         iconSize: '85%',
     },
     {
         id: 'nyai_me',
         name: 'Nyai.me',
-        iconUrl: 'https://nyai.me/img/necologofavicon-64.png',
+        iconUrl: SERVICE_ICON_URLS.nyai_me,
         iconSize: '85%',
     },
     {
         id: 'chub',
         name: 'Chub',
-        iconUrl: 'https://avatars.charhub.io/icons/assets/full_logo.png',
+        iconUrl: SERVICE_ICON_URLS.chub,
         iconSize: 'cover',
         iconBg: '#ffffff',
     },
     {
         id: 'character_tavern',
         name: 'Character Tavern',
-        iconUrl: 'https://character-tavern.com/_app/immutable/assets/logo.DGIlOnDO.png',
+        iconUrl: SERVICE_ICON_URLS.character_tavern,
         iconSize: 'cover',
     },
     {
         id: 'wyvern',
         name: 'Wyvern Chat',
-        iconUrl: 'https://app.wyvern.chat/icon-192x192.png',
+        iconUrl: SERVICE_ICON_URLS.wyvern,
         iconSize: 'cover',
     },
     {
         id: 'catbox',
         name: 'Catbox',
-        iconUrl: 'https://jannyai.com/logo.png', //#TODO replace with correct
+        iconUrl: SERVICE_ICON_URLS.catbox,
         iconSize: 'cover',
     },
     {
         id: 'anchorhold',
         name: '4chan - /aicg/',
-        iconUrl: 'https://assets.coingecko.com/coins/images/30124/large/4CHAN.png?1696529046',
+        iconUrl: SERVICE_ICON_URLS.anchorhold,
         iconSize: '85%',
     },
     {
         id: 'mlpchag',
         name: 'MLPchag',
-        iconUrl: 'https://jannyai.com/logo.png', //#TODO replace with correct, they have no logo
+        iconUrl: SERVICE_ICON_URLS.mlpchag,
         iconSize: 'cover',
     },
     {
         id: 'desuarchive',
         name: 'Desuarchive',
-        iconUrl: 'https://jannyai.com/logo.png', //#TODO replace with correct
+        iconUrl: SERVICE_ICON_URLS.desuarchive,
         iconSize: 'cover',
     },
     {
         id: 'jannyai',
         name: 'JannyAI',
-        iconUrl: 'https://jannyai.com/logo.png',
+        iconUrl: SERVICE_ICON_URLS.jannyai,
         iconSize: 'cover',
     },
     {
         id: 'backyard',
         name: 'Backyard.ai',
-        iconUrl: 'https://backyard.ai/favicon.png',
+        iconUrl: SERVICE_ICON_URLS.backyard,
         iconSize: 'cover',
     },
     {
         id: 'pygmalion',
         name: 'Pygmalion',
-        iconUrl: 'https://avatars.githubusercontent.com/u/118556045?s=200&v=4',
+        iconUrl: SERVICE_ICON_URLS.pygmalion,
         iconSize: '85%',
     },
 ];
@@ -2562,7 +2562,7 @@ function showSettingsModal() {
                     <div class="bb-settings-tab-content" data-content="api">
                         <div class="bb-setting-group bb-api-service-card">
                             <div style="display: inline-block; background: white; border-radius: 8px; padding: 8px 12px; margin-bottom: 10px;">
-                                <img src="https://avatars.charhub.io/icons/assets/full_logo.png" alt="Chub" style="height: 28px;">
+                                <img src="${SERVICE_ICON_URLS.chub}" alt="Chub" style="height: 28px;">
                             </div>
                             <label class="bb-checkbox">
                                 <input type="checkbox" id="bb-setting-chub-live-api" ${settings.useChubLiveApi !== false ? 'checked' : ''}>
