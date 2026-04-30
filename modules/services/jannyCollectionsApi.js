@@ -1,9 +1,69 @@
 // JannyAI Collections API - fetches and parses collections via CORS proxy
-import { proxiedFetch } from './corsProxy.js';
+import { proxiedFetch, PROXY_TYPES } from './corsProxy.js';
 import { decodeHtmlEntities, htmlToPlainText } from '../utils/utils.js';
 
 const JANNY_COLLECTIONS_URL = 'https://jannyai.com/collections';
 const JANNY_IMAGE_BASE = 'https://image.jannyai.com/bot-avatars/';
+const JANNY_COLLECTIONS_PROXY_CHAIN = [
+    PROXY_TYPES.SILLYTAVERN,
+    PROXY_TYPES.CORS_EU_ORG,
+    PROXY_TYPES.CORSPROXY_IO,
+    PROXY_TYPES.CORS_LOL,
+];
+
+function isJannyChallengeHtml(html) {
+    const text = String(html || '');
+    return /<title>\s*Just a moment\.\.\.\s*<\/title>/i.test(text)
+        || text.includes('window._cf_chl_opt')
+        || text.includes('challenge-error-text')
+        || text.includes('__cf_chl_f_tk');
+}
+
+function hasCollectionsMarkup(html) {
+    const text = String(html || '');
+    return /href=["'](?:https:\/\/jannyai\.com)?\/collections\/[a-f0-9-]+_[^"']+["']/i.test(text);
+}
+
+function hasCollectionDetailsMarkup(html) {
+    const text = String(html || '');
+    return /href=["'](?:https:\/\/jannyai\.com)?\/characters\/[a-f0-9-]+_[^"']+["']/i.test(text)
+        || /Characters\s*\(\d+\)/i.test(text);
+}
+
+async function fetchJannyCollectionsHtml(url, validateHtml, errorLabel, fetchOptions = {}) {
+    const errors = [];
+
+    for (const proxyType of JANNY_COLLECTIONS_PROXY_CHAIN) {
+        try {
+            const response = await proxiedFetch(url, {
+                service: 'jannyai',
+                proxyChain: [proxyType],
+                fetchOptions,
+            });
+
+            if (!response.ok) {
+                errors.push(`${proxyType}:${response.status}`);
+                continue;
+            }
+
+            const html = await response.text();
+            if (isJannyChallengeHtml(html)) {
+                errors.push(`${proxyType}:cloudflare`);
+                continue;
+            }
+            if (!validateHtml(html)) {
+                errors.push(`${proxyType}:unexpected-html`);
+                continue;
+            }
+
+            return html;
+        } catch (error) {
+            errors.push(`${proxyType}:${error?.message || error}`);
+        }
+    }
+
+    throw new Error(`${errorLabel}: ${errors.join('; ') || 'no valid response'}`);
+}
 
 /**
  * Fetch JannyAI collections list
@@ -21,24 +81,16 @@ export async function fetchJannyCollections(options = {}) {
 
     console.log('[CleanBotBrowser] Fetching JannyAI collections:', url);
 
-    const response = await proxiedFetch(url, {
-        service: 'jannyai',
-        fetchOptions: {
-            cache: 'no-store',
-            headers: {
-                'Accept': 'text/html',
-                'Cache-Control': 'no-cache, no-store, max-age=0',
-                'Pragma': 'no-cache',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
+    const html = await fetchJannyCollectionsHtml(url, hasCollectionsMarkup, 'Failed to fetch JannyAI collections', {
+        cache: 'no-store',
+        headers: {
+            'Accept': 'text/html',
+            'Cache-Control': 'no-cache, no-store, max-age=0',
+            'Pragma': 'no-cache',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
     });
 
-    if (!response.ok) {
-        throw new Error(`Failed to fetch JannyAI collections: ${response.status}`);
-    }
-
-    const html = await response.text();
     return parseCollectionsPage(html, page, sort);
 }
 
@@ -54,6 +106,128 @@ function stripHtmlComments(text) {
         .join('');
 }
 
+function getAttributeValue(element, name) {
+    return String(element?.getAttribute?.(name) || '').trim();
+}
+
+function normalizeJannyImageUrl(url) {
+    const value = String(url || '').trim();
+    if (!value) return '';
+    if (/^https?:\/\//i.test(value)) return value;
+    if (value.startsWith('/')) return `https://jannyai.com${value}`;
+    return value;
+}
+
+function parseCollectionsPageWithDom(html, currentPage, sort, totalEntries, totalPages) {
+    if (typeof DOMParser === 'undefined') return null;
+
+    const doc = new DOMParser().parseFromString(String(html || ''), 'text/html');
+    const links = Array.from(doc.querySelectorAll('a[href*="/collections/"]'));
+    const collections = [];
+    const seen = new Set();
+
+    for (const link of links) {
+        const href = getAttributeValue(link, 'href');
+        const fullPath = href.replace(/^https:\/\/jannyai\.com/i, '').replace(/^\/collections\//, '').split(/[?#]/)[0];
+        const pathParts = fullPath.match(/^([a-f0-9-]+)_(.+)$/i);
+        if (!pathParts || seen.has(fullPath)) continue;
+
+        const card = link.closest('.relative.inline-flex.flex-col') || link.closest('[class*="rounded-lg"]');
+        if (!card) continue;
+
+        const h3 = link.querySelector('h3');
+        const rawTitle = h3?.textContent || link.textContent || '';
+        const titleWithoutCount = rawTitle.replace(/\(\s*\d+\s*characters?\s*\)/i, '').replace(/\s+/g, ' ').trim();
+        const countMatch = rawTitle.match(/\(\s*(\d+)\s*characters?\s*\)/i) || card.textContent.match(/\(\s*(\d+)\s*characters?\s*\)/i);
+        const dateMatch = card.textContent.match(/Last updated:\s*(\d{1,2}\/\d{1,2}\/\d{4})/i);
+        const viewsMatch = card.textContent.match(/(\d[\d,]*)\s*views/i);
+        const creatorLink = card.querySelector('a[href*="/collectors/"]');
+        const creatorAvatar = card.querySelector('img.h-6.w-6.rounded-full');
+        const previewImages = Array.from(card.querySelectorAll('img.h-14.w-14'))
+            .map((img) => normalizeJannyImageUrl(getAttributeValue(img, 'src')))
+            .filter(Boolean)
+            .slice(0, 5);
+        const descriptionNode = Array.from(card.querySelectorAll('p.mt-4')).find((node) => node.textContent?.trim());
+
+        seen.add(fullPath);
+        collections.push({
+            id: pathParts[1],
+            slug: pathParts[2],
+            fullPath,
+            name: decodeHtmlEntities(titleWithoutCount) || 'Collection',
+            description: decodeHtmlEntities(descriptionNode?.textContent?.trim() || ''),
+            characterCount: countMatch ? parseInt(countMatch[1], 10) : 0,
+            lastUpdated: dateMatch ? dateMatch[1] : '',
+            creator: {
+                username: getAttributeValue(creatorLink, 'href').replace(/^https:\/\/jannyai\.com/i, '').replace(/^\/collectors\//, ''),
+                name: decodeHtmlEntities(creatorLink?.textContent?.trim() || 'Unknown'),
+                avatar: normalizeJannyImageUrl(getAttributeValue(creatorAvatar, 'src')),
+            },
+            views: viewsMatch ? parseInt(viewsMatch[1].replace(/,/g, ''), 10) : 0,
+            previewImages,
+            url: `https://jannyai.com/collections/${fullPath}`,
+        });
+    }
+
+    if (collections.length === 0) return null;
+
+    const orderedCollections = sortCollections(collections, sort);
+    console.log(`[CleanBotBrowser] Parsed ${orderedCollections.length} collections from page ${currentPage}`);
+
+    return {
+        collections: orderedCollections,
+        pagination: {
+            currentPage,
+            totalPages,
+            totalEntries,
+            hasMore: currentPage < totalPages,
+        },
+        sort,
+    };
+}
+
+function parseCollectionCharactersWithDom(cleanHtml) {
+    if (typeof DOMParser === 'undefined') return [];
+
+    const doc = new DOMParser().parseFromString(String(cleanHtml || ''), 'text/html');
+    const characters = [];
+    const seenIds = new Set();
+
+    for (const link of Array.from(doc.querySelectorAll('a[href*="/characters/"]'))) {
+        const href = getAttributeValue(link, 'href');
+        const match = href.replace(/^https:\/\/jannyai\.com/i, '').match(/^\/characters\/([a-f0-9-]+)_([^?#]+)/i);
+        if (!match) continue;
+
+        const charId = match[1];
+        if (seenIds.has(charId)) continue;
+        seenIds.add(charId);
+
+        const charSlug = match[2];
+        const img = link.querySelector('img[src*="image.jannyai.com"]');
+        const h5 = link.querySelector('h5');
+        const altName = getAttributeValue(img, 'alt').replace(/^Avatar of\s+/i, '');
+        const name = decodeHtmlEntities((h5?.textContent || altName || charSlug.replace(/^character-/, '').replace(/-/g, ' ')).trim());
+        const avatarUrl = normalizeJannyImageUrl(getAttributeValue(img, 'src'));
+        const tags = Array.from(link.querySelectorAll('li span'))
+            .map((tag) => decodeHtmlEntities(tag.textContent?.trim() || '').replace(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]\s*/u, '').trim())
+            .filter(Boolean);
+
+        characters.push({
+            id: charId,
+            slug: charSlug,
+            name,
+            avatar_url: avatarUrl,
+            image_url: `https://jannyai.com/characters/${charId}_${charSlug}`,
+            service: 'jannyai',
+            isJannyAI: true,
+            description: '',
+            tags,
+        });
+    }
+
+    return characters;
+}
+
 /**
  * Parse collections list HTML page
  * @param {string} html - HTML content
@@ -62,25 +236,31 @@ function stripHtmlComments(text) {
  * @returns {Object} Parsed collections data
  */
 function parseCollectionsPage(html, currentPage, sort) {
-    const collections = [];
-
     // Parse pagination info from "Showing X to Y of Z entries"
     const paginationMatch = html.match(/Showing\s*<span[^>]*>(\d+)<\/span>\s*to\s*<span[^>]*>(\d+)<\/span>\s*of\s*<span[^>]*>(\d+)<\/span>/);
     const totalEntries = paginationMatch ? parseInt(paginationMatch[3]) : 0;
     const entriesPerPage = 20;
     const totalPages = Math.ceil(totalEntries / entriesPerPage);
 
+    const domResult = parseCollectionsPageWithDom(html, currentPage, sort, totalEntries, totalPages);
+    if (domResult) return domResult;
+
+    const collections = [];
+
     // Parse each collection card
     // Collections are in divs with class containing "relative inline-flex flex-col rounded-lg"
     const collectionRegex = /<div class="relative inline-flex flex-col rounded-lg[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<\/div>\s*<\/div>\s*(?=<div class="relative inline-flex|<\/div>\s*<div class="mb-4|$)/g;
 
     // Simpler approach - find all collection links and work from there
-    const collectionLinkRegex = /href="\/collections\/([^"]+)"[^>]*>\s*<h3[^>]*>([^<]+)/g;
+    const collectionLinkRegex = /<a\b[^>]*href=["'](?:https:\/\/jannyai\.com)?\/collections\/([^"']+)["'][\s\S]*?<h3[^>]*>([\s\S]*?)<\/h3>/gi;
     let linkMatch;
 
     while ((linkMatch = collectionLinkRegex.exec(html)) !== null) {
         const fullPath = linkMatch[1];
-        const name = linkMatch[2].trim();
+        const name = htmlToPlainText(linkMatch[2].replace(/<!--[\s\S]*?-->/g, ''))
+            .replace(/\(\s*\d+\s*characters?\s*\)/i, '')
+            .replace(/\s+/g, ' ')
+            .trim();
 
         // Extract collection ID and slug from path like "e8dfcb5f-40ce-45da-8dda-a3e0b294a853_favourite--977"
         const pathParts = fullPath.match(/^([a-f0-9-]+)_(.+)$/);
@@ -240,21 +420,13 @@ export async function fetchJannyCollectionDetails(collectionId, slug) {
 
     console.log('[CleanBotBrowser] Fetching JannyAI collection details:', url);
 
-    const response = await proxiedFetch(url, {
-        service: 'jannyai',
-        fetchOptions: {
-            headers: {
-                'Accept': 'text/html',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
+    const html = await fetchJannyCollectionsHtml(url, hasCollectionDetailsMarkup, 'Failed to fetch collection details', {
+        headers: {
+            'Accept': 'text/html',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
     });
 
-    if (!response.ok) {
-        throw new Error(`Failed to fetch collection details: ${response.status}`);
-    }
-
-    const html = await response.text();
     return parseCollectionDetailsPage(html, collectionId, slug);
 }
 
@@ -266,7 +438,7 @@ export async function fetchJannyCollectionDetails(collectionId, slug) {
  * @returns {Object} Parsed collection details
  */
 function parseCollectionDetailsPage(html, collectionId, slug) {
-    const characters = [];
+    let characters = [];
     const seenIds = new Set();
 
     // Strip HTML comments from the entire page for cleaner parsing
@@ -305,12 +477,14 @@ function parseCollectionDetailsPage(html, collectionId, slug) {
     const characterCountMatch = cleanHtml.match(/Characters\s*\((\d+)\)/i);
     const characterCount = characterCountMatch ? parseInt(characterCountMatch[1]) : 0;
 
+    characters = parseCollectionCharactersWithDom(cleanHtml);
+
     // Find all character card anchor tags - they contain everything we need
     // Pattern: <a ... href="/characters/{uuid}_{slug}" ...>...card content...</a>
     const cardRegex = /<a[^>]*href="\/characters\/([a-f0-9-]+)_([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
     let cardMatch;
 
-    while ((cardMatch = cardRegex.exec(cleanHtml)) !== null) {
+    while (characters.length === 0 && (cardMatch = cardRegex.exec(cleanHtml)) !== null) {
         const charId = cardMatch[1];
 
         // Skip duplicates

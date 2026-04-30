@@ -949,7 +949,7 @@ function renderCollectionsPage(menuContent) {
                 // Switch to card browser with collection characters
                 const cards = collectionDetails.characters.map(char => ({
                     ...char,
-                    sourceService: 'jannyai',
+                    sourceService: 'jannyai_collection',
                     isJannyAI: true
                 }));
 

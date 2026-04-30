@@ -152,7 +152,7 @@ export async function createCardBrowser(serviceName, cards, state, extensionName
     state.isLorebooks = serviceName === 'chub_lorebooks';
 
     // Detect if this is JannyAI (always live API) - includes trending
-    state.isJannyAI = serviceName === 'jannyai' || cards.some(c => c.isJannyAI || c.sourceService === 'jannyai_trending');
+    state.isJannyAI = serviceName === 'jannyai' || cards.some(c => c.sourceService === 'jannyai_trending');
     if (serviceName === 'jannyai') {
         resetJannyApiState();
     }
