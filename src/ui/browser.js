@@ -19,7 +19,7 @@ import {
 } from '../services/apis/risuRealmApi.js';
 import { searchChubCards, transformChubCard } from '../services/apis/chubApi.js';
 import { searchBackyardCharacters, transformBackyardCard, backyardApiState, resetBackyardApiState, loadMoreBackyardCharacters, BACKYARD_SORT_TYPES } from '../services/apis/backyardApi.js';
-import { pygmalionApiState, resetPygmalionApiState, loadMorePygmalionCharacters } from '../services/apis/pygmalionApi.js';
+import { pygmalionApiState, resetPygmalionApiState, loadMorePygmalionCharacters, searchPygmalionCharacters, transformPygmalionCard, PYGMALION_SORT_TYPES } from '../services/apis/pygmalionApi.js';
 import { searchSakuraCharacters, transformSakuraCard, sakuraApiState, resetSakuraState } from '../services/apis/sakuraApi.js';
 import { searchSaucepanCompanions, transformSaucepanCard, saucepanApiState, resetSaucepanState } from '../services/apis/saucepanApi.js';
 import { searchBotbooruPosts, transformBotbooruCard, botbooruApiState, resetBotbooruState } from '../services/apis/botbooruApi.js';
@@ -141,14 +141,190 @@ function getBrowserCardsPerPage(state, extensionName, extension_settings) {
     return extension_settings[extensionName].cardsPerPage || 200;
 }
 
+function updateResultsCount(menuContent, text) {
+    const countContainer = menuContent?.querySelector('.bot-browser-results-count');
+    if (countContainer) {
+        countContainer.textContent = text;
+    }
+}
+
+function mergeHydratedAllSourceCards({ state, menuContent, cards, sourceLabel, showCardDetailFunc, extensionName, extension_settings, runId }) {
+    if (!state.isAllSources || state.currentService !== 'all' || state.allSourcesHydrationRunId !== runId) return 0;
+    if (String(state.filters?.search || '').trim()) return 0;
+    if (!Array.isArray(cards) || cards.length === 0) return 0;
+
+    const beforeCount = state.currentCards.length;
+    state.currentCards = deduplicateCards([...state.currentCards, ...cards]);
+    state.allSourcesBaseCards = state.currentCards;
+    state.fuse = null;
+    state.filteredCards = sortCards(applyClientSideFilters(state.currentCards, state, extensionName, extension_settings), state.sortBy);
+    state.totalPages = Math.max(1, Math.ceil(state.filteredCards.length / getBrowserCardsPerPage(state, extensionName, extension_settings)));
+
+    const added = Math.max(0, state.currentCards.length - beforeCount);
+    if (added > 0) {
+        updateCachedFiltersAndDropdowns(state, menuContent);
+        renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
+        const hydrated = state.allSourcesHydratedSources || 0;
+        updateResultsCount(menuContent, `${state.filteredCards.length} cards found - adding sources (${hydrated})`);
+        console.log(`[CleanBotBrowser] Search All background added ${added} cards from ${sourceLabel}`);
+    }
+
+    return added;
+}
+
+function startAllSourcesBackgroundHydration(state, menuContent, showCardDetailFunc, extensionName, extension_settings) {
+    if (!state.isAllSources || state.currentService !== 'all') return;
+    if (String(state.filters?.search || '').trim()) return;
+    if (state.allSourcesHydrating) return;
+
+    const runId = Date.now();
+    state.allSourcesHydrationRunId = runId;
+    state.allSourcesHydrating = true;
+    state.allSourcesHydratedSources = 0;
+    state.allSourcesBaseCards = state.currentCards;
+
+    const hideNsfw = extension_settings[extensionName].hideNsfw;
+    const sourceTask = (service, label, options = {}) => ({
+        label,
+        load: () => loadServiceIndex(service, false, { hideNsfw, ...options }).then(cards => (cards || []).map(card => ({
+            ...card,
+            sourceService: card.sourceService || service,
+        }))),
+    });
+
+    const sourceTasks = [
+        sourceTask('anchorhold', '4chan /aicg/', { limit: ANCHORHOLD_BROWSER_PAGE_SIZE }),
+    ].filter(Boolean);
+
+    const liveTasks = [
+        {
+            label: 'JannyAI',
+            load: () => searchJannyCharacters({
+                search: '',
+                page: 1,
+                limit: 40,
+                sort: 'createdAtStamp:desc',
+                nsfw: !hideNsfw,
+            }).then(result => (result?.results?.[0]?.hits || []).map(hit => ({
+                ...transformJannyCard(hit),
+                sourceService: 'jannyai',
+                isLiveApi: true,
+            }))),
+        },
+        {
+            label: 'Chub',
+            load: () => searchChubCards({
+                search: '',
+                limit: 48,
+                sort: 'download_count',
+                nsfw: !hideNsfw,
+            }).then(result => (result?.data?.nodes || result?.nodes || []).map(node => ({
+                ...transformChubCard(node),
+                sourceService: 'chub',
+                isLiveChub: true,
+                isLiveApi: true,
+            }))),
+        },
+        {
+            label: 'RisuRealm',
+            load: () => searchRisuRealm({
+                search: '',
+                page: 1,
+                sort: 'recommended',
+                nsfw: !hideNsfw,
+            }).then(result => (result.cards || []).map(card => ({
+                ...transformRisuRealmCard(card),
+                sourceService: 'risuai_realm',
+                isLiveApi: true,
+                isRisuRealm: true,
+            }))),
+        },
+        {
+            label: 'Pygmalion',
+            load: () => searchPygmalionCharacters({
+                orderBy: PYGMALION_SORT_TYPES.VIEWS,
+                includeSensitive: !hideNsfw,
+                pageSize: 40,
+            }).then(result => (result.characters || []).map(card => ({
+                ...transformPygmalionCard(card),
+                sourceService: 'pygmalion',
+                isLiveApi: true,
+            }))),
+        },
+        {
+            label: 'Backyard.ai',
+            load: () => searchBackyardCharacters({
+                sortBy: BACKYARD_SORT_TYPES.TRENDING,
+                type: hideNsfw ? 'sfw' : 'all',
+            }).then(result => (result.characters || []).map(card => ({
+                ...transformBackyardCard(card),
+                sourceService: 'backyard',
+                isLiveApi: true,
+            }))),
+        },
+        {
+            label: 'Character Tavern',
+            load: () => searchCharacterTavern({
+                sort: 'trending',
+                nsfw: !hideNsfw,
+                limit: 30,
+            }).then(cards => cards.map(card => ({
+                ...card,
+                sourceService: 'character_tavern',
+                isLiveApi: true,
+            }))),
+        },
+        {
+            label: 'Wyvern',
+            load: () => searchWyvernCharacters({
+                sort: 'downloads',
+                order: 'DESC',
+                limit: 30,
+                hideNsfw,
+            }).then(result => (result.results || []).map(card => ({
+                ...transformWyvernCard(card),
+                sourceService: 'wyvern',
+                isLiveApi: true,
+            }))),
+        },
+    ].filter(Boolean);
+
+    const tasks = [...sourceTasks, ...liveTasks];
+
+    updateResultsCount(menuContent, `${state.filteredCards.length} cards found - adding sources...`);
+
+    const runNext = async (index = 0) => {
+        if (index >= tasks.length || state.allSourcesHydrationRunId !== runId || state.currentService !== 'all' || String(state.filters?.search || '').trim()) {
+            state.allSourcesHydrating = false;
+            if (state.currentService === 'all' && !String(state.filters?.search || '').trim()) {
+                updateResultsCount(menuContent, `${state.filteredCards.length} cards found`);
+            }
+            return;
+        }
+
+        const task = tasks[index];
+        try {
+            const cards = await task.load();
+            state.allSourcesHydratedSources = (state.allSourcesHydratedSources || 0) + 1;
+            mergeHydratedAllSourceCards({ state, menuContent, cards, sourceLabel: task.label, showCardDetailFunc, extensionName, extension_settings, runId });
+        } catch (error) {
+            state.allSourcesHydratedSources = (state.allSourcesHydratedSources || 0) + 1;
+            console.warn(`[CleanBotBrowser] Search All background ${task.label} load failed:`, error);
+        }
+
+        setTimeout(() => runNext(index + 1), 250);
+    };
+
+    setTimeout(() => runNext(0), 150);
+}
+
 export async function createCardBrowser(serviceName, cards, state, extensionName, extension_settings, showCardDetailFunc) {
     state.view = 'browser';
     state.currentService = serviceName;
 
     // Detect if this is a live Chub API source (cards/lorebooks have isLiveChub flag)
-    const useLiveChubApi = extension_settings[extensionName].useChubLiveApi !== false;
     const isChubService = serviceName === 'chub' || serviceName === 'chub_lorebooks';
-    state.isLiveChub = isChubService && useLiveChubApi && cards.some(c => c.isLiveChub);
+    state.isLiveChub = isChubService && cards.some(c => c.isLiveChub);
     state.isLorebooks = serviceName === 'chub_lorebooks';
 
     // Detect if this is JannyAI (always live API) - includes trending
@@ -200,17 +376,15 @@ export async function createCardBrowser(serviceName, cards, state, extensionName
 
     state.isAnchorhold = serviceName === 'anchorhold' || cards.some(c => c.sourceService === 'anchorhold_live');
 
-    // Detect if this is Character Tavern with live API enabled
-    const useCharacterTavernLiveApi = extension_settings[extensionName].useCharacterTavernLiveApi === true;
-    state.isCharacterTavern = serviceName === 'character_tavern' && useCharacterTavernLiveApi && cards.some(c => c.isCharacterTavern || c.sourceService === 'character_tavern_live');
+    // Detect if this is Character Tavern.
+    state.isCharacterTavern = serviceName === 'character_tavern' && cards.some(c => c.isCharacterTavern || c.sourceService === 'character_tavern_live');
     if (state.isCharacterTavern) {
         resetCharacterTavernState();
     }
 
-    // Detect if this is Wyvern with live API enabled
-    const useWyvernLiveApi = extension_settings[extensionName].useWyvernLiveApi !== false;
+    // Detect if this is Wyvern.
     const isWyvernService = serviceName === 'wyvern' || serviceName === 'wyvern_lorebooks';
-    state.isWyvern = isWyvernService && useWyvernLiveApi && cards.some(c => c.isWyvern || c.sourceService === 'wyvern_live' || c.sourceService === 'wyvern_lorebooks_live');
+    state.isWyvern = isWyvernService && cards.some(c => c.isWyvern || c.sourceService === 'wyvern_live' || c.sourceService === 'wyvern_lorebooks_live');
     state.isWyvernLorebooks = serviceName === 'wyvern_lorebooks';
     if (state.isWyvern) {
         if (state.isWyvernLorebooks) {
@@ -239,6 +413,7 @@ export async function createCardBrowser(serviceName, cards, state, extensionName
         sourceService: card.sourceService || serviceName
     }));
     state.currentCards = deduplicateCards(cardsWithSource);
+    state.allSourcesBaseCards = serviceName === 'all' ? state.currentCards : null;
 
     // Load persistent search for this service ONLY if autoClearFilters is disabled
     const autoClearFilters = extension_settings[extensionName].autoClearFilters !== false;
@@ -362,7 +537,7 @@ export async function createCardBrowser(serviceName, cards, state, extensionName
     state.filteredCards = cardsWithImages;
     state.currentPage = 1;
     const cardsPerPage = getBrowserCardsPerPage(state, extensionName, extension_settings);
-    state.totalPages = Math.ceil(cardsWithImages.length / cardsPerPage);
+    state.totalPages = Math.max(1, Math.ceil(cardsWithImages.length / cardsPerPage));
 
     // For live Chub API: if initial filtered cards are less than cardsPerPage, load more pages
     // This fixes the issue where filtering removes most cards leaving only 1-5 visible initially
@@ -379,7 +554,7 @@ export async function createCardBrowser(serviceName, cards, state, extensionName
             apiState
         });
 
-        state.totalPages = Math.ceil(state.filteredCards.length / cardsPerPage);
+        state.totalPages = Math.max(1, Math.ceil(state.filteredCards.length / cardsPerPage));
     }
 
     if (state.isAnchorhold && state.filteredCards.length < cardsPerPage) {
@@ -485,6 +660,10 @@ export async function createCardBrowser(serviceName, cards, state, extensionName
     // Add service control listeners for new live API services
     if (state.isBotify || state.isJoyland || state.isSpicychat || state.isTalkie) {
         setupServiceControlListeners(menuContent, state, extensionName, extension_settings, showCardDetailFunc);
+    }
+
+    if (state.isAllSources) {
+        startAllSourcesBackgroundHydration(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
     }
 
     // Setup dismiss handler for API warning banner
@@ -726,25 +905,6 @@ function setupBrowserEventListeners(menuContent, state, extensionName, extension
                     ...(state.advancedFilters || {})
                 });
 
-                // If API returns no results and we have a search query, fallback to archive
-                if (cards.length === 0 && state.filters.search.trim()) {
-                    console.log('[CleanBotBrowser] Chub API returned no results, searching archive...');
-                    const archiveCards = await loadServiceIndex(chubService, false);
-                    if (archiveCards.length > 0) {
-                        const fuseKeys = state.isLorebooks
-                            ? ['name', 'description', 'creator', 'tags']
-                            : ['name', 'description', 'author', 'tags'];
-                        const archiveFuse = new Fuse(archiveCards, {
-                            keys: fuseKeys,
-                            threshold: 0.4,
-                            ignoreLocation: true
-                        });
-                        const archiveResults = archiveFuse.search(state.filters.search);
-                        cards = archiveResults.map(r => ({ ...r.item, fromArchive: true }));
-                        console.log(`[CleanBotBrowser] Found ${cards.length} results in Chub archive`);
-                    }
-                }
-
                 state.currentCards = cards;
 
                 // For live Chub, search is done server-side by the API
@@ -827,22 +987,6 @@ function setupBrowserEventListeners(menuContent, state, extensionName, extension
                     maxTokens: state.ctAdvancedFilters?.maxTokens || undefined,
                     tags: state.ctAdvancedFilters?.tags || []
                 });
-
-                // If API returns no results and we have a search query, fallback to archive
-                if (cards.length === 0 && state.filters.search.trim()) {
-                    console.log('[CleanBotBrowser] CT API returned no results, searching archive...');
-                    const archiveCards = await loadServiceIndex('character_tavern', false);
-                    if (archiveCards.length > 0) {
-                        const archiveFuse = new Fuse(archiveCards, {
-                            keys: ['name', 'description', 'author', 'tags'],
-                            threshold: 0.4,
-                            ignoreLocation: true
-                        });
-                        const archiveResults = archiveFuse.search(state.filters.search);
-                        cards = archiveResults.map(r => ({ ...r.item, fromArchive: true }));
-                        console.log(`[CleanBotBrowser] Found ${cards.length} results in CT archive`);
-                    }
-                }
 
                 state.currentCards = cards;
 
@@ -959,55 +1103,70 @@ function setupBrowserEventListeners(menuContent, state, extensionName, extension
             // For All Sources with a search query, query live APIs in parallel with local search
             console.log('[CleanBotBrowser] All Sources search:', state.filters.search);
             try {
-                const useLiveChubApi = extension_settings[extensionName].useChubLiveApi !== false;
-                const useRisuRealmLiveApi = extension_settings[extensionName].useRisuRealmLiveApi !== false;
                 const hideNsfw = extension_settings[extensionName].hideNsfw;
 
-                // Start with local Fuse.js search of current cards
-                if (!state.fuse) {
-                    state.fuse = new Fuse(state.currentCards, state.fuseOptions);
-                }
-                const localResults = state.fuse.search(state.filters.search).map(r => r.item);
+                // Start with local Fuse.js search of the original all-sources set.
+                const baseCards = Array.isArray(state.allSourcesBaseCards) && state.allSourcesBaseCards.length > 0
+                    ? state.allSourcesBaseCards
+                    : state.currentCards;
+                const localFuse = new Fuse(baseCards, state.fuseOptions);
+                const localResults = localFuse.search(state.filters.search).map(r => r.item);
 
                 // Query live APIs in parallel
                 const apiPromises = [];
 
-                if (useLiveChubApi) {
-                    apiPromises.push(
-                        searchChubCards({
-                            search: state.filters.search,
-                            limit: 50,
-                            sort: 'download_count',
-                            nsfw: !hideNsfw
-                        }).then(result => {
-                            const nodes = result?.data?.nodes || result?.nodes || [];
-                            return nodes.map(node => ({
-                                ...transformChubCard(node),
-                                sourceService: 'chub',
-                                isLiveChub: true,
-                                isLiveApi: true
-                            }));
-                        }).catch(() => [])
-                    );
-                }
+                apiPromises.push(
+                    searchJannyCharacters({
+                        search: state.filters.search,
+                        page: 1,
+                        limit: 60,
+                        sort: 'createdAtStamp:desc',
+                        nsfw: !hideNsfw
+                    }).then(result => {
+                        const hits = result?.results?.[0]?.hits || [];
+                        return hits.map(hit => ({
+                            ...transformJannyCard(hit),
+                            sourceService: 'jannyai',
+                            isLiveApi: true
+                        }));
+                    }).catch(error => {
+                        console.warn('[CleanBotBrowser] All Sources JannyAI search failed:', error);
+                        return [];
+                    })
+                );
 
-                if (useRisuRealmLiveApi) {
-                    apiPromises.push(
-                        searchRisuRealm({
-                            search: state.filters.search,
-                            page: 1,
-                            sort: 'recommended',
-                            nsfw: !hideNsfw
-                        }).then(result =>
-                            result.cards.map(card => ({
-                                ...transformRisuRealmCard(card),
-                                sourceService: 'risuai_realm',
-                                isLiveApi: true,
-                                isRisuRealm: true
-                            }))
-                        ).catch(() => [])
-                    );
-                }
+                apiPromises.push(
+                    searchChubCards({
+                        search: state.filters.search,
+                        limit: 50,
+                        sort: 'download_count',
+                        nsfw: !hideNsfw
+                    }).then(result => {
+                        const nodes = result?.data?.nodes || result?.nodes || [];
+                        return nodes.map(node => ({
+                            ...transformChubCard(node),
+                            sourceService: 'chub',
+                            isLiveChub: true,
+                            isLiveApi: true
+                        }));
+                    }).catch(() => [])
+                );
+
+                apiPromises.push(
+                    searchRisuRealm({
+                        search: state.filters.search,
+                        page: 1,
+                        sort: 'recommended',
+                        nsfw: !hideNsfw
+                    }).then(result =>
+                        result.cards.map(card => ({
+                            ...transformRisuRealmCard(card),
+                            sourceService: 'risuai_realm',
+                            isLiveApi: true,
+                            isRisuRealm: true
+                        }))
+                    ).catch(() => [])
+                );
 
                 // Wait for all API results
                 const apiResults = await Promise.all(apiPromises);
@@ -1033,6 +1192,11 @@ function setupBrowserEventListeners(menuContent, state, extensionName, extension
                 refreshCardGrid(state, extensionName, extension_settings, showCardDetailFunc);
             }
         } else {
+            if (state.isAllSources && Array.isArray(state.allSourcesBaseCards) && state.allSourcesBaseCards.length > 0) {
+                state.currentCards = state.allSourcesBaseCards;
+                state.fuse = null;
+            }
+
             // Lazy initialize Fuse.js when user starts searching
             if (state.filters.search && !state.fuse) {
                 console.log('[CleanBotBrowser] Initializing Fuse.js search index...');
@@ -3301,7 +3465,7 @@ export function refreshCardGrid(state, extensionName, extension_settings, showCa
     state.filteredCards = cardsWithImages;
     state.currentPage = 1;
     const cardsPerPage = getBrowserCardsPerPage(state, extensionName, extension_settings);
-    state.totalPages = Math.ceil(cardsWithImages.length / cardsPerPage);
+    state.totalPages = Math.max(1, Math.ceil(cardsWithImages.length / cardsPerPage));
 
     const menuContent = document.querySelector('.bot-browser-content');
     const countContainer = document.querySelector('.bot-browser-results-count');

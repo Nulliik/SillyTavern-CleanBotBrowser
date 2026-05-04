@@ -489,7 +489,7 @@ export async function proxiedFetch(url, options = {}) {
         proxies = proxies.filter((proxyType) => !PUBLIC_RELAY_PROXY_TYPES.has(proxyType));
     }
 
-    if (hasAuthHeaders || hasPublicAuthHeaders || hasRequestSensitiveHeaders || allowPublicAuth) {
+    if (!allowPublicAuth && (hasAuthHeaders || hasPublicAuthHeaders || hasRequestSensitiveHeaders)) {
         proxies = proxies.filter((proxyType) => !THIRD_PARTY_PROXY_TYPES.has(proxyType));
     }
 
@@ -628,6 +628,13 @@ export async function proxiedFetch(url, options = {}) {
                 const error = new Error(`Unauthorized by ${PROXY_CONFIGS[proxyType].name} (401)`);
                 errors.push({ proxy: proxyType, error });
                 debugWarn(`[CORS Proxy] ${PROXY_CONFIGS[proxyType].name} returned 401, trying next proxy`);
+                continue;
+            }
+
+            if (response.status === 404 && proxyType !== PROXY_TYPES.NONE) {
+                const error = new Error(`Not found from ${PROXY_CONFIGS[proxyType].name} (404)`);
+                errors.push({ proxy: proxyType, error });
+                debugWarn(`[CORS Proxy] ${PROXY_CONFIGS[proxyType].name} returned 404, trying next proxy`);
                 continue;
             }
 

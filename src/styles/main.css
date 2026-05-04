@@ -4033,18 +4033,6 @@ body #bot-browser-settings-modal,
     margin-bottom: 20px;
 }
 
-.bb-api-service-card {
-    text-align: center;
-    padding: 14px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.025);
-}
-
-.bb-api-service-card .bb-checkbox {
-    justify-content: center;
-}
-
 .bb-setting-group label {
     display: block;
     color: rgba(255, 255, 255, 0.9);
@@ -4512,47 +4500,6 @@ body #bot-browser-settings-modal,
     background: #fff;
 }
 
-.bb-api-options {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-    margin-top: 15px;
-}
-
-.bb-api-option {
-    padding: 16px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
-    text-align: center;
-}
-
-.bb-api-option i {
-    font-size: 1.8em;
-    margin-bottom: 10px;
-    display: block;
-}
-
-.bb-api-option.live i {
-    color: rgba(100, 200, 100, 0.9);
-}
-
-.bb-api-option.archive i {
-    color: rgba(150, 150, 200, 0.9);
-}
-
-.bb-api-option strong {
-    display: block;
-    color: rgba(255, 255, 255, 0.9);
-    font-size: 0.95em;
-    margin-bottom: 6px;
-}
-
-.bb-api-option small {
-    color: rgba(255, 255, 255, 0.5);
-    font-size: 0.8em;
-}
-
 .bb-settings-footer {
     padding: 16px 24px;
     background: rgba(0, 0, 0, 0.3);
@@ -4827,9 +4774,6 @@ body #bot-browser-settings-modal,
         padding: 14px 18px;
     }
 
-    .bb-api-options {
-        grid-template-columns: 1fr;
-    }
 }
 
 /* Extra specificity override for settings modal on all screen sizes */

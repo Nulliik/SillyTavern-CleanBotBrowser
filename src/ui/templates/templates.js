@@ -229,26 +229,10 @@ export function getOriginalMenuHTML(recentlyViewed, extensionVersion = '1.0.1') 
                     ${createServiceIconHTML('botbooru', { background: '#111827' })}
                     <span>BotBooru</span>
                 </button>
-                <!-- Archive Sources (sorted by size - largest first) -->
-                <button class="bot-browser-source" data-source="catbox">
-                    ${createServiceIconHTML('catbox')}
-                    <span>Catbox</span>
-                </button>
+                <!-- Live board feed -->
                 <button class="bot-browser-source" data-source="anchorhold">
                     ${createServiceIconHTML('anchorhold', { size: '85%' })}
                     <span>4chan - /aicg/</span>
-                </button>
-                <button class="bot-browser-source" data-source="desuarchive">
-                    ${createServiceIconHTML('desuarchive')}
-                    <span>Desuarchive</span>
-                </button>
-                <button class="bot-browser-source" data-source="webring">
-                    ${createServiceIconHTML('webring', { size: '85%' })}
-                    <span>Webring</span>
-                </button>
-                <button class="bot-browser-source" data-source="nyai_me">
-                    ${createServiceIconHTML('nyai_me', { size: '85%' })}
-                    <span>Nyai.me</span>
                 </button>
             </div>
         </div>

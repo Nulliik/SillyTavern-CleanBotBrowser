@@ -6,14 +6,13 @@ const JANNY_API_BASE = 'https://jannyai.com/api';
 export const JANNY_IMAGE_BASE = 'https://image.jannyai.com/bot-avatars/';
 const DEBUG = typeof window !== 'undefined' && window.__BOT_BROWSER_DEBUG === true;
 const JANNY_PROXY_CHAIN = [
-    PROXY_TYPES.SILLYTAVERN,
+    PROXY_TYPES.NONE,
     PROXY_TYPES.CORS_EU_ORG,
     PROXY_TYPES.CORSPROXY_IO,
     PROXY_TYPES.CORS_LOL,
     PROXY_TYPES.PUTER,
 ];
 const JANNY_SEARCH_PROXY_CHAIN = [
-    PROXY_TYPES.NONE,
     ...JANNY_PROXY_CHAIN,
 ];
 
@@ -139,9 +138,9 @@ async function resolveJannyCharacterUrl(characterId, searchHint = '') {
  * Fetch the MeiliSearch API token from JannyAI's client config
  * @returns {Promise<string>} The API token
  */
-async function getSearchToken() {
+async function getSearchToken({ forceRefresh = false } = {}) {
     // Return cached token if available
-    if (cachedToken) {
+    if (cachedToken && !forceRefresh) {
         return cachedToken;
     }
 
@@ -204,6 +203,7 @@ async function getSearchToken() {
             if (DEBUG) console.log('[CleanBotBrowser] Fetched fresh JannyAI search token');
             return cachedToken;
         } catch (error) {
+            cachedToken = null;
             throw new Error(`Failed to fetch JannyAI search token from the live site: ${error.message}`);
         } finally {
             tokenFetchPromise = null;
@@ -655,38 +655,49 @@ export async function searchJannyCharacters(options = {}) {
 
     if (DEBUG) console.log('[CleanBotBrowser] JannyAI search request:', requestBody);
 
-    const baseHeaders = {
+    const buildSearchHeaders = (token) => ({
         'Accept': '*/*',
         'Content-Type': 'application/json',
         // JannyAI MeiliSearch requires its public search key.
         // Keep this as the final authority even if the user configured headers for jannyai.
-        'Authorization': `Bearer ${await getSearchToken()}`,
+        'Authorization': `Bearer ${token}`,
         'Origin': 'https://jannyai.com',
         'Referer': 'https://jannyai.com/',
         'x-meilisearch-client': 'Meilisearch instant-meilisearch (v0.19.0) ; Meilisearch JavaScript (v0.41.0)'
-    };
+    });
 
     const userHeaders = getAuthHeadersForService('jannyai');
-    const headers = { ...userHeaders, ...baseHeaders };
+    const performSearch = async (token) => {
+        const baseHeaders = buildSearchHeaders(token);
+        const headers = { ...userHeaders, ...baseHeaders };
 
-    // JannyAI search should stay on direct/local transports because it uses
-    // Authorization-style search headers.
-    const response = await proxiedFetch(JANNY_SEARCH_URL, {
-        service: 'jannyai',
-        // The Meili endpoint is CORS-open in the real standalone/ST iframe runtime.
-        // Try direct fetch first so the source does not stall behind unnecessary proxy hops.
-        proxyChain: JANNY_SEARCH_PROXY_CHAIN,
-        timeoutMs: 10000,
-        fetchOptions: {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(requestBody)
-        }
-    });
+        // JannyAI search should stay on direct/local transports because it uses
+        // Authorization-style search headers.
+        return proxiedFetch(JANNY_SEARCH_URL, {
+            service: 'jannyai',
+            // The Meili endpoint is CORS-open in the real standalone/ST iframe runtime.
+            // Try direct fetch first so the source does not stall behind unnecessary proxy hops.
+            proxyChain: JANNY_SEARCH_PROXY_CHAIN,
+            timeoutMs: 10000,
+            allowPublicAuth: true,
+            publicAuthHeaders: baseHeaders,
+            fetchOptions: {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(requestBody)
+            }
+        });
+    };
+
+    let response = await performSearch(await getSearchToken());
+    if (response.status === 401 || response.status === 403) {
+        response = await performSearch(await getSearchToken({ forceRefresh: true }));
+    }
 
     if (!response.ok) {
         const errorText = await response.text().catch(() => '');
-        throw new Error(`JannyAI search error ${response.status}: ${errorText}`);
+        const summary = errorText.replace(/\s+/g, ' ').trim().slice(0, 300);
+        throw new Error(`JannyAI search error ${response.status}${summary ? `: ${summary}` : ''}`);
     }
 
     const data = await response.json();

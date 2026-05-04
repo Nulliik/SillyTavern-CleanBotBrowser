@@ -137,18 +137,6 @@ const randomServiceOptions = [
         iconBg: '#111827',
     },
     {
-        id: 'webring',
-        name: 'Webring',
-        iconUrl: SERVICE_ICON_URLS.webring,
-        iconSize: '85%',
-    },
-    {
-        id: 'nyai_me',
-        name: 'Nyai.me',
-        iconUrl: SERVICE_ICON_URLS.nyai_me,
-        iconSize: '85%',
-    },
-    {
         id: 'chub',
         name: 'Chub',
         iconUrl: SERVICE_ICON_URLS.chub,
@@ -168,12 +156,6 @@ const randomServiceOptions = [
         iconSize: 'cover',
     },
     {
-        id: 'catbox',
-        name: 'Catbox',
-        iconUrl: SERVICE_ICON_URLS.catbox,
-        iconSize: 'cover',
-    },
-    {
         id: 'anchorhold',
         name: '4chan - /aicg/',
         iconUrl: SERVICE_ICON_URLS.anchorhold,
@@ -183,12 +165,6 @@ const randomServiceOptions = [
         id: 'mlpchag',
         name: 'MLPchag',
         iconUrl: SERVICE_ICON_URLS.mlpchag,
-        iconSize: 'cover',
-    },
-    {
-        id: 'desuarchive',
-        name: 'Desuarchive',
-        iconUrl: SERVICE_ICON_URLS.desuarchive,
         iconSize: 'cover',
     },
     {
@@ -234,11 +210,6 @@ const defaultSettings = {
     hideNsfw: false,
     trackStats: true,
     tagBlocklist: [],
-    useChubLiveApi: true,
-    useCharacterTavernLiveApi: true,
-    useRisuRealmLiveApi: true,
-    useMlpchagLiveApi: true,
-    useWyvernLiveApi: true,
     autoClearFilters: true,
     randomServices: getDefaultRandomServiceSettings(),
     corsProxySettings: getDefaultCorsProxySettings(),
@@ -273,7 +244,7 @@ function loadSettings() {
         }
     }
 
-    const removedAuthSettingKeys = [
+    const removedSettingKeys = [
         'chubToken',
         'saucepanToken',
         'saucepanDisplayName',
@@ -291,15 +262,20 @@ function loadSettings() {
         'wyvernFirebaseApiKey',
         'pygmalionToken',
         'pygmalionDisplayName',
+        'useChubLiveApi',
+        'useCharacterTavernLiveApi',
+        'useRisuRealmLiveApi',
+        'useMlpchagLiveApi',
+        'useWyvernLiveApi',
     ];
-    let removedAuthSettings = false;
-    for (const key of removedAuthSettingKeys) {
+    let removedSettings = false;
+    for (const key of removedSettingKeys) {
         if (Object.prototype.hasOwnProperty.call(extension_settings[extensionName], key)) {
             delete extension_settings[extensionName][key];
-            removedAuthSettings = true;
+            removedSettings = true;
         }
     }
-    if (removedAuthSettings) {
+    if (removedSettings) {
         saveSettingsDebounced();
     }
 
@@ -308,6 +284,11 @@ function loadSettings() {
     if (typeof randomServices !== 'object' || randomServices === null) {
         extension_settings[extensionName].randomServices = getDefaultRandomServiceSettings();
     } else {
+        for (const service of ['catbox', 'desuarchive', 'webring', 'nyai_me']) {
+            if (Object.prototype.hasOwnProperty.call(randomServices, service)) {
+                delete randomServices[service];
+            }
+        }
         for (const service of randomServiceOptions) {
             if (randomServices[service.id] === undefined) {
                 randomServices[service.id] = true;
@@ -1269,212 +1250,13 @@ function setupSourceButtons(menu) {
                 state.sortBy = extension_settings[extensionName].defaultSortBy || 'relevance';
             }
 
-            // Check if live Chub API is enabled
-            const useLiveChubApi = extension_settings[extensionName].useChubLiveApi !== false;
-
             try {
                 let cards = [];
 
                 if (sourceName === 'all') {
-                    toastr.info('Loading all cards (including live APIs)...', '', { timeOut: 2000 });
-
-                    // Services that use static archives only
-                    const staticServices = ['anchorhold', 'catbox', 'nyai_me', 'webring', 'desuarchive'];
-
-                    // Add Chub only if using archive mode (not live API)
-                    if (!useLiveChubApi) {
-                        staticServices.push('chub');
-                    }
-
-                    // Add RisuRealm only if using archive mode
-                    const useRisuRealmLiveApi = extension_settings[extensionName].useRisuRealmLiveApi !== false;
-                    if (!useRisuRealmLiveApi) {
-                        staticServices.push('risuai_realm');
-                    }
-
-                    // Add Character Tavern only if using archive mode
-                    const useCharacterTavernLiveApi = extension_settings[extensionName].useCharacterTavernLiveApi !== false;
-                    if (!useCharacterTavernLiveApi) {
-                        staticServices.push('character_tavern');
-                    }
-
-                    // Add Wyvern only if using archive mode
-                    const useWyvernLiveApi = extension_settings[extensionName].useWyvernLiveApi !== false;
-                    if (!useWyvernLiveApi) {
-                        staticServices.push('wyvern');
-                    }
-
-                    // Add MLPchag only if using archive mode
-                    const useMlpchagLiveApi = extension_settings[extensionName].useMlpchagLiveApi !== false;
-                    if (!useMlpchagLiveApi) {
-                        staticServices.push('mlpchag');
-                    }
-
-                    // Load all static services in parallel
-                    const servicePromises = staticServices.map(service => {
-                        return loadServiceIndex(service, false).then(serviceCards =>
-                            serviceCards.map(card => ({
-                                ...card,
-                                sourceService: service
-                            }))
-                        ).catch(err => {
-                            console.warn(`[CleanBotBrowser] Failed to load ${service}:`, err);
-                            return [];
-                        });
-                    });
-
-                    // Also load live APIs in parallel
-                    const liveApiPromises = [];
-
-                    if (useLiveChubApi) {
-                        liveApiPromises.push(
-                            searchChubCards({
-                                search: '',
-                                limit: 100,
-                                sort: 'download_count',
-                                nsfw: !extension_settings[extensionName].hideNsfw
-                            }).then(result => {
-                                // Chub API returns { data: { nodes: [...] } }
-                                const nodes = result?.data?.nodes || result?.nodes || [];
-                                return nodes.map(node => ({
-                                    ...transformChubCard(node),
-                                    sourceService: 'chub',
-                                    isLiveChub: true
-                                }));
-                            }).catch(err => {
-                                console.warn('[CleanBotBrowser] Failed to load Chub live API:', err);
-                                return [];
-                            })
-                        );
-                    }
-
-                    if (useRisuRealmLiveApi) {
-                        liveApiPromises.push(
-                            searchRisuRealm({
-                                search: '',
-                                page: 1,
-                                sort: 'recommended',
-                                nsfw: !extension_settings[extensionName].hideNsfw
-                            }).then(result =>
-                                result.cards.map(card => ({
-                                    ...transformRisuRealmCard(card),
-                                    sourceService: 'risuai_realm',
-                                    isLiveApi: true
-                                }))
-                            ).catch(err => {
-                                console.warn('[CleanBotBrowser] Failed to load RisuRealm live API:', err);
-                                return [];
-                            })
-                        );
-                    }
-
-                    // Pygmalion - always live API
-                    liveApiPromises.push(
-                        searchPygmalionCharacters({
-                            orderBy: PYGMALION_SORT_TYPES.VIEWS,
-                            includeSensitive: !extension_settings[extensionName].hideNsfw,
-                            pageSize: 60
-                        }).then(result =>
-                            result.characters.map(card => ({
-                                ...transformPygmalionCard(card),
-                                sourceService: 'pygmalion',
-                                isLiveApi: true
-                            }))
-                        ).catch(err => {
-                            console.warn('[CleanBotBrowser] Failed to load Pygmalion live API:', err);
-                            return [];
-                        })
-                    );
-
-                    // Backyard.ai - always live API
-                    liveApiPromises.push(
-                        searchBackyardCharacters({
-                            sortBy: BACKYARD_SORT_TYPES.TRENDING,
-                            type: extension_settings[extensionName].hideNsfw ? 'sfw' : 'all'
-                        }).then(result =>
-                            result.characters.map(card => ({
-                                ...transformBackyardCard(card),
-                                sourceService: 'backyard',
-                                isLiveApi: true
-                            }))
-                        ).catch(err => {
-                            console.warn('[CleanBotBrowser] Failed to load Backyard.ai live API:', err);
-                            return [];
-                        })
-                    );
-
-                    // Character Tavern - live API if enabled
-                    if (useCharacterTavernLiveApi) {
-                        liveApiPromises.push(
-                            searchCharacterTavern({
-                                sort: 'trending',
-                                nsfw: !extension_settings[extensionName].hideNsfw
-                            }).then(result =>
-                                result.characters.map(card => ({
-                                    ...card,
-                                    sourceService: 'character_tavern',
-                                    isLiveApi: true
-                                }))
-                            ).catch(err => {
-                                console.warn('[CleanBotBrowser] Failed to load Character Tavern live API:', err);
-                                return [];
-                            })
-                        );
-                    }
-
-                    // Wyvern - live API if enabled
-                    if (useWyvernLiveApi) {
-                        liveApiPromises.push(
-                            import('./services/apis/wyvernApi.js').then(({ searchWyvernCards, transformWyvernCard }) =>
-                                searchWyvernCards({ sort: 'downloads', nsfw: !extension_settings[extensionName].hideNsfw })
-                                    .then(result =>
-                                        (result.characters || []).map(card => ({
-                                            ...transformWyvernCard(card),
-                                            sourceService: 'wyvern',
-                                            isLiveApi: true
-                                        }))
-                                    )
-                            ).catch(err => {
-                                console.warn('[CleanBotBrowser] Failed to load Wyvern live API:', err);
-                                return [];
-                            })
-                        );
-                    }
-
-                    // MLPchag - live API if enabled
-                    if (useMlpchagLiveApi) {
-                        liveApiPromises.push(
-                            import('./services/apis/mlpchagApi.js').then(({ loadMlpchagLive }) =>
-                                loadMlpchagLive().then(cards =>
-                                    cards.map(card => ({
-                                        ...card,
-                                        sourceService: 'mlpchag',
-                                        isLiveApi: true
-                                    }))
-                                )
-                            ).catch(err => {
-                                console.warn('[CleanBotBrowser] Failed to load MLPchag live API:', err);
-                                return [];
-                            })
-                        );
-                    }
-
-                    // Wait for all sources in parallel
-                    const [allServiceCards, ...liveApiCards] = await Promise.all([
-                        Promise.all(servicePromises),
-                        ...liveApiPromises
-                    ]);
-
-                    // Combine static and live API results
-                    cards = allServiceCards.flat();
-                    liveApiCards.forEach(apiCards => {
-                        cards = cards.concat(apiCards);
-                    });
-
-                    // JannyAI is always excluded (blocked by anti-bot)
-                    toastr.info('JanitorAI excluded (blocked by anti-bot protection)', '', { timeOut: 3000 });
-
-                    console.log(`[CleanBotBrowser] Loaded ${cards.length} cards from all sources (${staticServices.length} archives + ${liveApiPromises.length} live APIs)`);
+                    toastr.info('Opening Search All...', '', { timeOut: 1000 });
+                    cards = [];
+                    console.log('[CleanBotBrowser] Opening Search All immediately; sources hydrate in the background');
                 } else if (sourceName === 'chub_favorites') {
                     if (!isChubLoggedIn()) {
                         toastr.error('Chub API token required. Go to Settings → API to add your token.', 'Not Logged In', { timeOut: 4000 });
@@ -1605,41 +1387,28 @@ function setupSourceButtons(menu) {
                     await loadTrendingSource(sourceName, menu);
                     return;
                 } else if (sourceName === 'risuai_realm') {
-                    // RisuRealm - try live API first, fallback to archive
-                    const useRisuRealmLiveApi = extension_settings[extensionName].useRisuRealmLiveApi !== false;
+                    // RisuRealm uses the live API in this cleaned build.
+                    toastr.info('Loading RisuRealm...', '', { timeOut: 2000 });
+                    resetRisuRealmState();
 
-                    if (useRisuRealmLiveApi) {
-                        try {
-                            toastr.info('Loading RisuRealm (Live)...', '', { timeOut: 2000 });
-                            resetRisuRealmState();
+                    const autoClear = extension_settings[extensionName].autoClearFilters !== false;
+                    const persistedSearch = autoClear ? null : loadPersistentSearch(extensionName, extension_settings, sourceName);
 
-                            const autoClear = extension_settings[extensionName].autoClearFilters !== false;
-                            const persistedSearch = autoClear ? null : loadPersistentSearch(extensionName, extension_settings, sourceName);
+                    // Map sort options
+                    let risuSort = 'recommended';
+                    const sortBy = persistedSearch?.sortBy || extension_settings[extensionName].defaultSortBy || 'relevance';
+                    if (sortBy === 'date_desc' || sortBy === 'date_asc') risuSort = 'date';
+                    else if (sortBy === 'relevance') risuSort = 'download';
 
-                            // Map sort options
-                            let risuSort = 'recommended';
-                            const sortBy = persistedSearch?.sortBy || extension_settings[extensionName].defaultSortBy || 'relevance';
-                            if (sortBy === 'date_desc' || sortBy === 'date_asc') risuSort = 'date';
-                            else if (sortBy === 'relevance') risuSort = 'download';
+                    const result = await searchRisuRealm({
+                        search: persistedSearch?.filters?.search || '',
+                        page: 1,
+                        sort: risuSort,
+                        nsfw: !extension_settings[extensionName].hideNsfw
+                    });
 
-                            const result = await searchRisuRealm({
-                                search: persistedSearch?.filters?.search || '',
-                                page: 1,
-                                sort: risuSort,
-                                nsfw: !extension_settings[extensionName].hideNsfw
-                            });
-
-                            cards = result.cards.map(transformRisuRealmCard);
-                            console.log(`[CleanBotBrowser] Loaded ${cards.length} RisuRealm cards (live API)`);
-                        } catch (error) {
-                            console.warn('[CleanBotBrowser] RisuRealm live API failed, falling back to archive:', error.message);
-                            toastr.warning('Live API failed, loading archive...', '', { timeOut: 2000 });
-                            cards = await loadServiceIndex(sourceName, false);
-                        }
-                    } else {
-                        toastr.info('Loading RisuRealm (Archive)...', '', { timeOut: 2000 });
-                        cards = await loadServiceIndex(sourceName, false);
-                    }
+                    cards = result.cards.map(transformRisuRealmCard);
+                    console.log(`[CleanBotBrowser] Loaded ${cards.length} RisuRealm cards`);
                 } else if (sourceName === 'backyard') {
                     // Backyard.ai uses its own live API
                     toastr.info('Loading Backyard.ai...', '', { timeOut: 2000 });
@@ -1913,20 +1682,8 @@ function setupSourceButtons(menu) {
                     const isMlpchag = sourceName === 'mlpchag';
                     const isWyvern = sourceName === 'wyvern' || sourceName === 'wyvern_lorebooks';
                     const isAnchorhold = sourceName === 'anchorhold';
-                    const useLiveCharacterTavernApi = extension_settings[extensionName].useCharacterTavernLiveApi !== false;
-                    const useLiveMlpchagApi = extension_settings[extensionName].useMlpchagLiveApi !== false;
-                    const useWyvernLiveApi = extension_settings[extensionName].useWyvernLiveApi !== false;
-
                     let useLive = false;
-                    if (isChubService) {
-                        useLive = useLiveChubApi;
-                    } else if (isCharacterTavern) {
-                        useLive = useLiveCharacterTavernApi;
-                    } else if (isMlpchag) {
-                        useLive = useLiveMlpchagApi;
-                    } else if (isWyvern) {
-                        useLive = useWyvernLiveApi;
-                    } else if (isAnchorhold) {
+                    if (isChubService || isCharacterTavern || isMlpchag || isWyvern || isAnchorhold) {
                         useLive = true;
                     }
 
@@ -2067,9 +1824,6 @@ async function showFavoriteCreatorPings() {
 }
 
 async function loadRandomCardsForService(selectedService) {
-    const useLiveChubApi = extension_settings[extensionName].useChubLiveApi !== false;
-    const useRisuRealmLiveApi = extension_settings[extensionName].useRisuRealmLiveApi !== false;
-
     // Special handling for live APIs - use random pages for true randomness
     if (selectedService === 'jannyai') {
         const searchResults = await searchJannyCharacters({
@@ -2082,7 +1836,7 @@ async function loadRandomCardsForService(selectedService) {
         return (results.hits || []).map(hit => transformJannyCard(hit));
     }
 
-    if (selectedService === 'chub' && useLiveChubApi) {
+    if (selectedService === 'chub') {
         const randomPage = secureRandomInt(50) + 1;
         const result = await searchChubCards({
             search: '',
@@ -2099,7 +1853,7 @@ async function loadRandomCardsForService(selectedService) {
         }));
     }
 
-    if (selectedService === 'risuai_realm' && useRisuRealmLiveApi) {
+    if (selectedService === 'risuai_realm') {
         const randomPage = secureRandomInt(20) + 1;
         const result = await searchRisuRealm({
             search: '',
@@ -2622,77 +2376,9 @@ function showSettingsModal() {
                             </div>
                         </div>
 
-                        <div class="bb-setting-group bb-api-service-card">
-                            <div style="display: inline-block; background: white; border-radius: 8px; padding: 8px 12px; margin-bottom: 10px;">
-                                <img src="${SERVICE_ICON_URLS.chub}" alt="Chub" style="height: 28px;">
-                            </div>
-                            <label class="bb-checkbox">
-                                <input type="checkbox" id="bb-setting-chub-live-api" ${settings.useChubLiveApi !== false ? 'checked' : ''}>
-                                <span>Use Live Chub API</span>
-                            </label>
-                            <small>Latest public cards with advanced filters. Personal Chub actions require direct CORS support or a trusted local proxy.</small>
-                        </div>
-
-                        <div class="bb-api-options">
-                            <div class="bb-api-option live">
-                                <i class="fa-solid fa-bolt"></i>
-                                <strong>Live API</strong>
-                                <small>Latest cards with advanced filters</small>
-                            </div>
-                            <div class="bb-api-option archive">
-                                <i class="fa-solid fa-shield-halved"></i>
-                                <strong>Safe Mode</strong>
-                                <small>Remote static archives are disabled in this cleaned build</small>
-                            </div>
-                        </div>
-
-                        <div class="bb-setting-group bb-api-service-card">
-                            <div style="display: inline-block; background: linear-gradient(135deg, #2d1b4e, #1a1a2e); border-radius: 8px; padding: 8px 16px; margin-bottom: 10px;">
-                                <span style="font-size: 18px; font-weight: bold; color: #c9a0ff;">Character Tavern</span>
-                            </div>
-                            <label class="bb-checkbox">
-                                <input type="checkbox" id="bb-setting-ct-live-api" ${settings.useCharacterTavernLiveApi ? 'checked' : ''}>
-                                <span>Use Live Character Tavern API</span>
-                            </label>
-                            <small>Enable live search with token range, lorebook, and OC filters.</small>
-                        </div>
-
-                        <div class="bb-setting-group bb-api-service-card">
-                            <div style="display: inline-block; background: linear-gradient(135deg, #1e3a5f, #2d1b4e); border-radius: 8px; padding: 8px 16px; margin-bottom: 10px;">
-                                <span style="font-size: 18px; font-weight: bold; color: #7dd3fc;">RisuRealm</span>
-                            </div>
-                            <label class="bb-checkbox">
-                                <input type="checkbox" id="bb-setting-risurealm-live-api" ${settings.useRisuRealmLiveApi !== false ? 'checked' : ''}>
-                                <span>Use Live RisuRealm API</span>
-                            </label>
-                            <small>Fetch characters from realm.risuai.net.</small>
-                        </div>
-
-                        <div class="bb-setting-group bb-api-service-card">
-                            <div style="display: inline-block; background: linear-gradient(135deg, #2d1b4e, #1a2e1a); border-radius: 8px; padding: 8px 16px; margin-bottom: 10px;">
-                                <span style="font-size: 18px; font-weight: bold; color: #c9ffda;">MLPChag</span>
-                            </div>
-                            <label class="bb-checkbox">
-                                <input type="checkbox" id="bb-setting-mlpchag-live-api" ${settings.useMlpchagLiveApi ? 'checked' : ''}>
-                                <span>Use Live MLPChag API</span>
-                            </label>
-                            <small>Fetch characters directly from mlpchag.neocities.org.</small>
-                        </div>
-
-                        <div class="bb-setting-group bb-api-service-card">
-                            <div style="display: inline-block; background: linear-gradient(135deg, #4a1d6e, #1a2e4e); border-radius: 8px; padding: 8px 16px; margin-bottom: 10px;">
-                                <span style="font-size: 18px; font-weight: bold; color: #d4a0ff;">Wyvern Chat</span>
-                            </div>
-                            <label class="bb-checkbox">
-                                <input type="checkbox" id="bb-setting-wyvern-live-api" ${settings.useWyvernLiveApi !== false ? 'checked' : ''}>
-                                <span>Use Live Wyvern API</span>
-                            </label>
-                            <small>Fetch characters and lorebooks from app.wyvern.chat/api.</small>
-                        </div>
-
                         <div class="bb-setting-note">
                             <i class="fa-solid fa-shield-halved"></i>
-                            <span>Account login and token/cookie paste flows are disabled in this cleaned browse-only build.</span>
+                            <span>Live browse sources are always enabled in this cleaned build. Account login and token/cookie paste flows are disabled.</span>
                         </div>
                     </div>
                 </div>
@@ -2957,11 +2643,6 @@ function showSettingsModal() {
 
         const blocklistText = document.getElementById('bb-setting-tag-blocklist').value;
         settings.tagBlocklist = blocklistText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-        settings.useChubLiveApi = document.getElementById('bb-setting-chub-live-api').checked;
-        settings.useCharacterTavernLiveApi = document.getElementById('bb-setting-ct-live-api').checked;
-        settings.useRisuRealmLiveApi = document.getElementById('bb-setting-risurealm-live-api').checked;
-        settings.useMlpchagLiveApi = document.getElementById('bb-setting-mlpchag-live-api').checked;
-        settings.useWyvernLiveApi = document.getElementById('bb-setting-wyvern-live-api').checked;
 
         const nextCorsProxySettings = getDefaultCorsProxySettings();
         nextCorsProxySettings.order = [];
