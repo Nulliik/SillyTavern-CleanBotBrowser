@@ -6,7 +6,7 @@ import { default_avatar, getCharacters, characters, getRequestHeaders, name1 } f
 import { importTags, tag_import_setting } from '/scripts/tags.js';
 import { loadCardChunk } from '../services/cache.js';
 import { fetchQuillgenCard } from '../services/apis/quillgenApi.js';
-import { buildProxyUrl, PROXY_TYPES, proxiedFetch } from '../services/corsProxy.js';
+import { buildProxyUrl, filterProxyChainBySettings, PROXY_TYPES, proxiedFetch } from '../services/corsProxy.js';
 import { getPygmalionCharacter, transformFullPygmalionCharacter } from '../services/apis/pygmalionApi.js';
 import { getSakuraCharacter, transformFullSakuraCharacter } from '../services/apis/sakuraApi.js';
 import { getSaucepanCompanion, transformFullSaucepanCompanion } from '../services/apis/saucepanApi.js';
@@ -74,6 +74,10 @@ const IMAGE_PROXY_CHAIN = [
     PROXY_TYPES.CORS_LOL,
 ];
 
+function getImageProxyChain() {
+    return filterProxyChainBySettings([PROXY_TYPES.NONE, ...IMAGE_PROXY_CHAIN]);
+}
+
 /**
  * Fetch an image with automatic CORS proxy fallback
  * @param {string} imageUrl - The image URL to fetch
@@ -82,23 +86,15 @@ const IMAGE_PROXY_CHAIN = [
 async function fetchImageWithProxyChain(imageUrl) {
     if (!imageUrl) return null;
 
-    // Try direct fetch first
-    try {
-        const response = await fetch(imageUrl);
-        if (response.ok) {
-            console.log('[CleanBotBrowser] Direct image fetch succeeded:', imageUrl);
-            return await response.blob();
-        }
-    } catch (e) {
-        console.log('[CleanBotBrowser] Direct fetch failed, trying proxies...');
-    }
-
-    // Try each proxy in the chain
-    for (let i = 0; i < IMAGE_PROXY_CHAIN.length; i++) {
+    // Try each enabled transport in the configured CORS routing order.
+    const imageProxyChain = getImageProxyChain();
+    for (let i = 0; i < imageProxyChain.length; i++) {
         try {
-            const proxyType = IMAGE_PROXY_CHAIN[i];
+            const proxyType = imageProxyChain[i];
             let response;
-            if (proxyType === PROXY_TYPES.PUTER) {
+            if (proxyType === PROXY_TYPES.NONE) {
+                response = await fetch(imageUrl);
+            } else if (proxyType === PROXY_TYPES.PUTER) {
                 response = await proxiedFetch(imageUrl, {
                     proxyChain: [PROXY_TYPES.PUTER],
                     fetchOptions: { method: 'GET' },
@@ -115,7 +111,7 @@ async function fetchImageWithProxyChain(imageUrl) {
                 return await response.blob();
             }
         } catch (e) {
-            console.log(`[CleanBotBrowser] Proxy ${IMAGE_PROXY_CHAIN[i]} failed for:`, imageUrl);
+            console.log(`[CleanBotBrowser] Proxy ${imageProxyChain[i]} failed for:`, imageUrl);
         }
     }
 

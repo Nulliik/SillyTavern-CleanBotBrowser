@@ -2,7 +2,7 @@
 // Public browse API: https://app.wyvern.chat/api/characters/public
 // Public lorebooks API: https://app.wyvern.chat/api/lorebooks/public
 
-import { getAuthHeadersForService, proxiedFetch } from '../corsProxy.js';
+import { getAuthHeadersForService, isProxyTypeEnabled, PROXY_TYPES, proxiedFetch } from '../corsProxy.js';
 import { ensureFreshWyvernToken } from '../authManager.js';
 
 const WYVERN_API_BASE = 'https://app.wyvern.chat/api';
@@ -25,18 +25,20 @@ async function fetchWyvernResponse(url, service = 'wyvern') {
         ...getWyvernAuthHeaders(service),
     };
 
-    try {
-        const response = await fetch(url, {
-            headers,
-        });
+    if (isProxyTypeEnabled(PROXY_TYPES.NONE)) {
+        try {
+            const response = await fetch(url, {
+                headers,
+            });
 
-        if (response.ok) {
-            return response;
+            if (response.ok) {
+                return response;
+            }
+
+            console.warn(`[CleanBotBrowser] Wyvern direct fetch failed (${response.status}), falling back to proxy:`, url);
+        } catch (error) {
+            console.warn('[CleanBotBrowser] Wyvern direct fetch failed, falling back to proxy:', error);
         }
-
-        console.warn(`[CleanBotBrowser] Wyvern direct fetch failed (${response.status}), falling back to proxy:`, url);
-    } catch (error) {
-        console.warn('[CleanBotBrowser] Wyvern direct fetch failed, falling back to proxy:', error);
     }
 
     return proxiedFetch(url, {

@@ -1,4 +1,5 @@
 import { extension_settings } from '/scripts/extensions.js';
+import { proxiedFetch } from '../corsProxy.js';
 
 const QUILLGEN_API_URL = 'https://quillgen.app/v1/public/api/browse';
 
@@ -18,7 +19,10 @@ export async function loadQuillgenIndex() {
             headers['Authorization'] = `Bearer ${apiKey}`;
         }
 
-        const response = await fetch(`${QUILLGEN_API_URL}/characters?limit=500`, { headers });
+        const response = await proxiedFetch(`${QUILLGEN_API_URL}/characters?limit=500`, {
+            service: 'quillgen',
+            fetchOptions: { headers },
+        });
 
         if (response.status === 401) {
             if (apiKey) {
@@ -80,7 +84,10 @@ export async function fetchQuillgenCard(card) {
     }
 
     try {
-        const response = await fetch(cardUrl, fetchOptions);
+        const response = await proxiedFetch(cardUrl, {
+            service: 'quillgen',
+            fetchOptions,
+        });
 
         if (response.status === 401) {
             console.error('[CleanBotBrowser] QuillGen authentication failed', response);

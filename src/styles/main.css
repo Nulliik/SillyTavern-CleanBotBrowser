@@ -4284,6 +4284,234 @@ body #bot-browser-settings-modal,
     opacity: 1;
 }
 
+.bb-cors-proxy-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 14px;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.22);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.bb-cors-proxy-list.drag-active {
+    background: rgba(80, 130, 220, 0.09);
+    border-color: rgba(100, 150, 255, 0.28);
+}
+
+.bb-cors-proxy-item {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) 36px 48px;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 12px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.025));
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    cursor: grab;
+    margin: 0 !important;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.16);
+    transition: opacity 0.18s ease, transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.bb-cors-proxy-item:hover {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.035));
+    border-color: rgba(100, 150, 255, 0.28);
+}
+
+.bb-cors-proxy-item.dragging {
+    opacity: 0.58;
+    transform: scale(0.985);
+    cursor: grabbing;
+}
+
+.bb-cors-proxy-item.disabled {
+    opacity: 0.55;
+}
+
+.bb-cors-proxy-drag {
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background: rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.52);
+    cursor: grab;
+}
+
+.bb-cors-proxy-drag:hover {
+    color: rgba(255, 255, 255, 0.85);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.bb-cors-proxy-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.bb-cors-proxy-name {
+    color: rgba(255, 255, 255, 0.92);
+    font-size: 0.92em;
+    font-weight: 600;
+}
+
+.bb-cors-proxy-copy small {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.78em;
+    line-height: 1.35;
+}
+
+.bb-cors-proxy-status {
+    width: fit-content;
+    margin-top: 2px;
+    padding: 3px 7px;
+    background: rgba(255, 255, 255, 0.055);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    color: rgba(255, 255, 255, 0.48);
+    font-size: 0.72em;
+    font-weight: 600;
+}
+
+.bb-cors-proxy-status[data-status="testing"] {
+    color: rgba(150, 195, 255, 0.95);
+    border-color: rgba(100, 150, 255, 0.28);
+    background: rgba(100, 150, 255, 0.1);
+}
+
+.bb-cors-proxy-status[data-status="ok"] {
+    color: rgba(120, 235, 170, 0.95);
+    border-color: rgba(80, 220, 140, 0.32);
+    background: rgba(80, 220, 140, 0.1);
+}
+
+.bb-cors-proxy-status[data-status="error"] {
+    color: rgba(255, 140, 140, 0.95);
+    border-color: rgba(255, 100, 100, 0.32);
+    background: rgba(255, 100, 100, 0.1);
+}
+
+.bb-cors-proxy-test {
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background: rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.62);
+    cursor: pointer;
+}
+
+.bb-cors-proxy-test:hover:not(:disabled) {
+    color: rgba(130, 190, 255, 0.95);
+    border-color: rgba(100, 150, 255, 0.35);
+    background: rgba(100, 150, 255, 0.1);
+}
+
+.bb-cors-proxy-test:disabled {
+    opacity: 0.55;
+    cursor: wait;
+}
+
+.bb-cors-proxy-item.testing .bb-cors-proxy-test i {
+    animation: bb-cors-pulse 0.85s ease-in-out infinite;
+}
+
+.bb-cors-proxy-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 10px;
+}
+
+.bb-cors-proxy-test-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(100, 150, 255, 0.12);
+    border: 1px solid rgba(100, 150, 255, 0.28);
+    border-radius: 8px;
+    color: rgba(220, 235, 255, 0.94);
+    font-size: 0.82em;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.bb-cors-proxy-test-all:hover:not(:disabled) {
+    background: rgba(100, 150, 255, 0.2);
+    border-color: rgba(100, 150, 255, 0.45);
+}
+
+.bb-cors-proxy-test-all:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+@keyframes bb-cors-pulse {
+    0%, 100% { opacity: 0.55; transform: scale(0.96); }
+    50% { opacity: 1; transform: scale(1.04); }
+}
+
+.bb-cors-proxy-switch {
+    display: flex !important;
+    align-items: center;
+    justify-content: flex-end;
+    margin: 0 !important;
+    cursor: pointer;
+}
+
+.bb-cors-proxy-switch input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.bb-cors-proxy-switch span {
+    width: 42px;
+    height: 24px;
+    position: relative;
+    display: inline-block;
+    background: rgba(255, 255, 255, 0.13);
+    border: 1px solid rgba(255, 255, 255, 0.13);
+    border-radius: 999px;
+    transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.bb-cors-proxy-switch span::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 16px;
+    height: 16px;
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 50%;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    transition: transform 0.18s ease, background 0.18s ease;
+}
+
+.bb-cors-proxy-switch input:checked + span {
+    background: rgba(100, 150, 255, 0.45);
+    border-color: rgba(100, 150, 255, 0.55);
+}
+
+.bb-cors-proxy-switch input:checked + span::after {
+    transform: translateX(18px);
+    background: #fff;
+}
+
 .bb-api-options {
     display: grid;
     grid-template-columns: 1fr 1fr;

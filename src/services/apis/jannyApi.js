@@ -6,7 +6,7 @@ const JANNY_API_BASE = 'https://jannyai.com/api';
 export const JANNY_IMAGE_BASE = 'https://image.jannyai.com/bot-avatars/';
 const DEBUG = typeof window !== 'undefined' && window.__BOT_BROWSER_DEBUG === true;
 const JANNY_PROXY_CHAIN = [
-    PROXY_TYPES.PLUGIN,
+    PROXY_TYPES.SILLYTAVERN,
     PROXY_TYPES.CORS_EU_ORG,
     PROXY_TYPES.CORSPROXY_IO,
     PROXY_TYPES.CORS_LOL,

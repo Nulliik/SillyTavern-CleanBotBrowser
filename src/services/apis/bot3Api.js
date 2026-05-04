@@ -1,4 +1,4 @@
-import { isCleanBotBrowserPluginAvailable, proxiedFetch } from '../corsProxy.js';
+import { isProxyTypeEnabled, PROXY_TYPES, proxiedFetch } from '../corsProxy.js';
 import { htmlToPlainText } from '../../utils/utils.js';
 
 const BOT3_BASE = 'https://bot3.ai';
@@ -718,42 +718,29 @@ async function fetchBot3Text(url, options = {}) {
         if (preferJina) {
             const jinaUrl = buildJinaUrl(url);
             const accept = 'text/plain,text/html,*/*;q=0.8';
-            const pluginReady = await isCleanBotBrowserPluginAvailable().catch(() => false);
-            const attempts = pluginReady
-                ? [
-                    async () => {
-                        const response = await proxiedFetch(jinaUrl, {
-                            service: 'bot3',
-                            fetchOptions: {
-                                method: 'GET',
-                                headers: { Accept: accept },
-                            },
-                            timeoutMs: 30000,
-                        });
-                        if (!response.ok) {
-                            throw new Error(`BOT3 Jina request failed: ${response.status}`);
-                        }
-                        return await response.text();
+            const directJinaAttempt = async () => fetchBot3DirectText(jinaUrl, accept, 6000);
+            const proxiedJinaAttempt = async () => {
+                const response = await proxiedFetch(jinaUrl, {
+                    service: 'bot3',
+                    fetchOptions: {
+                        method: 'GET',
+                        headers: { Accept: accept },
                     },
-                    async () => fetchBot3DirectText(jinaUrl, accept, 4000),
-                ]
-                : [
-                    async () => fetchBot3DirectText(jinaUrl, accept, 6000),
-                    async () => {
-                        const response = await proxiedFetch(jinaUrl, {
-                            service: 'bot3',
-                            fetchOptions: {
-                                method: 'GET',
-                                headers: { Accept: accept },
-                            },
-                            timeoutMs: 30000,
-                        });
-                        if (!response.ok) {
-                            throw new Error(`BOT3 Jina request failed: ${response.status}`);
-                        }
-                        return await response.text();
-                    },
-                ];
+                    timeoutMs: 30000,
+                });
+                if (!response.ok) {
+                    throw new Error(`BOT3 Jina request failed: ${response.status}`);
+                }
+                return await response.text();
+            };
+            const attempts = [
+                ...(isProxyTypeEnabled(PROXY_TYPES.NONE) ? [directJinaAttempt] : []),
+                proxiedJinaAttempt,
+            ];
+
+            if (attempts.length === 0) {
+                attempts.push(proxiedJinaAttempt);
+            }
 
             let lastError = null;
             for (const attempt of attempts) {

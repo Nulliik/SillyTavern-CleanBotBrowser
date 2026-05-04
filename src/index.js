@@ -86,6 +86,14 @@ import {
 } from './services/authManager.js';
 import { loadFavoriteCreatorsFeed, checkFavoriteCreatorUpdates } from './services/favoriteCreators.js';
 import { antiSlopDefaults } from './services/antiSlop.js';
+import {
+    buildProxyUrl,
+    CORS_PROXY_SETTING_DEFINITIONS,
+    configureCorsProxySettings,
+    getDefaultCorsProxySettings,
+    normalizeCorsProxySettings,
+    PROXY_TYPES,
+} from './services/corsProxy.js';
 
 // Extension version (from manifest.json)
 const EXTENSION_VERSION = '1.0.1';
@@ -233,6 +241,7 @@ const defaultSettings = {
     useWyvernLiveApi: true,
     autoClearFilters: true,
     randomServices: getDefaultRandomServiceSettings(),
+    corsProxySettings: getDefaultCorsProxySettings(),
     favoriteCreatorPings: true,
     ...antiSlopDefaults,
 };
@@ -308,6 +317,8 @@ function loadSettings() {
 
     // Initialize auth stubs for the cleaned browse-only build.
     const settings = extension_settings[extensionName];
+    settings.corsProxySettings = normalizeCorsProxySettings(settings.corsProxySettings);
+    configureCorsProxySettings(settings.corsProxySettings);
     initAuthFromSettings(settings, setHarpyUserToken);
 }
 
@@ -2278,6 +2289,14 @@ function setupStandaloneImportBridge() {
 // Show settings modal
 function showSettingsModal() {
     const settings = extension_settings[extensionName];
+    const corsProxySettings = normalizeCorsProxySettings(settings.corsProxySettings);
+    const corsProxyDefinitionByType = new Map(CORS_PROXY_SETTING_DEFINITIONS.map((proxy) => [proxy.type, proxy]));
+    const orderedCorsProxyDefinitions = [
+        ...(corsProxySettings.order || [])
+            .map((proxyType) => corsProxyDefinitionByType.get(proxyType))
+            .filter(Boolean),
+        ...CORS_PROXY_SETTING_DEFINITIONS.filter((proxy) => !(corsProxySettings.order || []).includes(proxy.type)),
+    ];
     const antiSlopNumberSetting = (id, label, value, description = '', step = 1) => `
         <div class="bb-anti-slop-number">
             <label for="${id}">${escapeHTML(label)}</label>
@@ -2285,6 +2304,33 @@ function showSettingsModal() {
             ${description ? `<small>${escapeHTML(description)}</small>` : ''}
         </div>
     `;
+    const corsProxyToggle = (proxy) => {
+        const enabled = corsProxySettings[proxy.type] !== false;
+        return `
+            <div class="bb-cors-proxy-item${enabled ? '' : ' disabled'}"
+                 draggable="true"
+                 data-proxy-type="${escapeHTML(proxy.type)}">
+                <button type="button" class="bb-cors-proxy-drag" title="Drag to reorder" aria-label="Drag ${escapeHTML(proxy.name)}">
+                    <i class="fa-solid fa-grip-vertical"></i>
+                </button>
+                <span class="bb-cors-proxy-copy">
+                    <span class="bb-cors-proxy-name">${escapeHTML(proxy.name)}</span>
+                    <small>${escapeHTML(proxy.description)}</small>
+                    <span class="bb-cors-proxy-status" data-status="idle">Not tested</span>
+                </span>
+                <button type="button" class="bb-cors-proxy-test" title="Test availability" aria-label="Test ${escapeHTML(proxy.name)}">
+                    <i class="fa-solid fa-signal"></i>
+                </button>
+                <label class="bb-cors-proxy-switch" title="${enabled ? 'Enabled' : 'Disabled'}">
+                    <input type="checkbox"
+                           class="bb-cors-proxy-toggle"
+                           data-proxy-type="${escapeHTML(proxy.type)}"
+                           ${enabled ? 'checked' : ''}>
+                    <span></span>
+                </label>
+            </div>
+        `;
+    };
 
     // Create a completely new modal structure with dedicated classes
     const modalHTML = `
@@ -2563,6 +2609,19 @@ function showSettingsModal() {
 
                     <!-- API TAB -->
                     <div class="bb-settings-tab-content" data-content="api">
+                        <div class="bb-setting-group">
+                            <label><i class="fa-solid fa-network-wired"></i> CORS Proxy Routing</label>
+                            <small>Drag to set fallback order. Disabled transports stay in the list but will be skipped.</small>
+                            <div class="bb-cors-proxy-actions">
+                                <button type="button" id="bb-test-cors-proxies" class="bb-cors-proxy-test-all">
+                                    <i class="fa-solid fa-satellite-dish"></i> Test All
+                                </button>
+                            </div>
+                            <div class="bb-cors-proxy-list" id="bb-cors-proxy-list">
+                                ${orderedCorsProxyDefinitions.map(corsProxyToggle).join('')}
+                            </div>
+                        </div>
+
                         <div class="bb-setting-group bb-api-service-card">
                             <div style="display: inline-block; background: white; border-radius: 8px; padding: 8px 12px; margin-bottom: 10px;">
                                 <img src="${SERVICE_ICON_URLS.chub}" alt="Chub" style="height: 28px;">
@@ -2571,7 +2630,7 @@ function showSettingsModal() {
                                 <input type="checkbox" id="bb-setting-chub-live-api" ${settings.useChubLiveApi !== false ? 'checked' : ''}>
                                 <span>Use Live Chub API</span>
                             </label>
-                            <small>Latest public cards with advanced filters. Personal Chub actions require the local CleanBotBrowser plugin or direct CORS support.</small>
+                            <small>Latest public cards with advanced filters. Personal Chub actions require direct CORS support or a trusted local proxy.</small>
                         </div>
 
                         <div class="bb-api-options">
@@ -2689,6 +2748,149 @@ function showSettingsModal() {
         });
     });
 
+    // CORS proxy routing drag-and-drop
+    const corsProxyList = document.getElementById('bb-cors-proxy-list');
+    const getDragAfterElement = (container, y) => {
+        const draggableElements = [...container.querySelectorAll('.bb-cors-proxy-item:not(.dragging)')];
+        return draggableElements.reduce((closest, child) => {
+            const box = child.getBoundingClientRect();
+            const offset = y - box.top - box.height / 2;
+            if (offset < 0 && offset > closest.offset) {
+                return { offset, element: child };
+            }
+            return closest;
+        }, { offset: Number.NEGATIVE_INFINITY, element: null }).element;
+    };
+
+    if (corsProxyList) {
+        const corsProxyTestUrl = 'https://httpbin.org/get?cleanbotbrowser_proxy_test=1';
+        const setCorsProxyStatus = (item, status, text) => {
+            const statusEl = item?.querySelector('.bb-cors-proxy-status');
+            if (!statusEl) return;
+            statusEl.dataset.status = status;
+            statusEl.textContent = text;
+        };
+        const withAbortTimeout = async (url, options = {}, timeoutMs = 8000) => {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+            try {
+                return await fetch(url, {
+                    ...options,
+                    cache: 'no-store',
+                    signal: controller.signal,
+                });
+            } finally {
+                clearTimeout(timeoutId);
+            }
+        };
+        const testCorsProxyItem = async (item) => {
+            const proxyType = item?.dataset?.proxyType;
+            if (!proxyType) return false;
+
+            const testButton = item.querySelector('.bb-cors-proxy-test');
+            const startedAt = performance.now();
+            testButton?.setAttribute('disabled', 'disabled');
+            item.classList.add('testing');
+            setCorsProxyStatus(item, 'testing', 'Testing...');
+
+            try {
+                let response;
+                if (proxyType === PROXY_TYPES.NONE) {
+                    response = await withAbortTimeout(`${corsProxyTestUrl}&direct=1`);
+                } else {
+                    const proxyUrl = buildProxyUrl(proxyType, `${corsProxyTestUrl}&proxy=${encodeURIComponent(proxyType)}`, {
+                        ignoreSettings: true,
+                    });
+                    if (!proxyUrl) throw new Error('Disabled or unavailable');
+                    response = await withAbortTimeout(proxyUrl);
+                }
+
+                const elapsedMs = Math.max(1, Math.round(performance.now() - startedAt));
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                setCorsProxyStatus(item, 'ok', `Available (${elapsedMs} ms)`);
+                return true;
+            } catch (error) {
+                const message = error?.name === 'AbortError'
+                    ? 'Timed out'
+                    : (error?.message || 'Unavailable');
+                setCorsProxyStatus(item, 'error', message);
+                return false;
+            } finally {
+                item.classList.remove('testing');
+                testButton?.removeAttribute('disabled');
+            }
+        };
+
+        corsProxyList.querySelectorAll('.bb-cors-proxy-item').forEach((item) => {
+            item.addEventListener('dragstart', (e) => {
+                item.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', item.dataset.proxyType || '');
+            });
+
+            item.addEventListener('dragend', () => {
+                item.classList.remove('dragging');
+                corsProxyList.classList.remove('drag-active');
+            });
+        });
+
+        corsProxyList.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            corsProxyList.classList.add('drag-active');
+            const draggingItem = corsProxyList.querySelector('.bb-cors-proxy-item.dragging');
+            if (!draggingItem) return;
+            const afterElement = getDragAfterElement(corsProxyList, e.clientY);
+            if (afterElement) {
+                corsProxyList.insertBefore(draggingItem, afterElement);
+            } else {
+                corsProxyList.appendChild(draggingItem);
+            }
+        });
+
+        corsProxyList.addEventListener('drop', (e) => {
+            e.preventDefault();
+            corsProxyList.classList.remove('drag-active');
+        });
+
+        corsProxyList.addEventListener('dragleave', (e) => {
+            if (!corsProxyList.contains(e.relatedTarget)) {
+                corsProxyList.classList.remove('drag-active');
+            }
+        });
+
+        corsProxyList.querySelectorAll('.bb-cors-proxy-toggle').forEach((input) => {
+            input.addEventListener('change', () => {
+                const item = input.closest('.bb-cors-proxy-item');
+                if (!item) return;
+                item.classList.toggle('disabled', !input.checked);
+                input.closest('.bb-cors-proxy-switch')?.setAttribute('title', input.checked ? 'Enabled' : 'Disabled');
+            });
+        });
+
+        corsProxyList.querySelectorAll('.bb-cors-proxy-test').forEach((button) => {
+            button.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                void testCorsProxyItem(button.closest('.bb-cors-proxy-item'));
+            });
+        });
+
+        document.getElementById('bb-test-cors-proxies')?.addEventListener('click', async (e) => {
+            e.preventDefault();
+            const button = e.currentTarget;
+            button.setAttribute('disabled', 'disabled');
+            const items = [...corsProxyList.querySelectorAll('.bb-cors-proxy-item')];
+            try {
+                await Promise.all(items.map((item) => testCorsProxyItem(item)));
+            } finally {
+                button.removeAttribute('disabled');
+            }
+        });
+    }
+
     // Range sliders
     document.getElementById('bb-setting-max-recent').addEventListener('input', (e) => {
         document.getElementById('bb-max-recent-value').textContent = e.target.value;
@@ -2760,6 +2962,17 @@ function showSettingsModal() {
         settings.useRisuRealmLiveApi = document.getElementById('bb-setting-risurealm-live-api').checked;
         settings.useMlpchagLiveApi = document.getElementById('bb-setting-mlpchag-live-api').checked;
         settings.useWyvernLiveApi = document.getElementById('bb-setting-wyvern-live-api').checked;
+
+        const nextCorsProxySettings = getDefaultCorsProxySettings();
+        nextCorsProxySettings.order = [];
+        panel.querySelectorAll('.bb-cors-proxy-item').forEach((item) => {
+            const proxyType = item.dataset.proxyType;
+            if (!proxyType) return;
+            nextCorsProxySettings.order.push(proxyType);
+            const input = item.querySelector('.bb-cors-proxy-toggle');
+            nextCorsProxySettings[proxyType] = input?.checked !== false;
+        });
+        settings.corsProxySettings = configureCorsProxySettings(nextCorsProxySettings);
 
         settings.antiSlopEnabled = document.getElementById('bb-setting-anti-slop-enabled').checked;
         settings.antiSlopMode = document.getElementById('bb-setting-anti-slop-mode').value;

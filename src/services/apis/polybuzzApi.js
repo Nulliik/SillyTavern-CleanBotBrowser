@@ -572,7 +572,7 @@ async function fetchPolybuzzText(url, options = {}) {
 
         const response = await proxiedFetch(jinaUrl, {
             // Jina is only a read-only text relay for the public page, so do not
-            // forward PolyBuzz session cookies/headers to it on the plugin path.
+            // forward PolyBuzz session cookies/headers to it on a trusted local path.
             service: 'default',
             fetchOptions: {
                 method: 'GET',

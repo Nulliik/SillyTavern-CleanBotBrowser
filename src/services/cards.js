@@ -1,4 +1,4 @@
-import { buildProxyUrl, PROXY_TYPES, proxiedFetch } from './corsProxy.js';
+import { buildProxyUrl, filterProxyChainBySettings, PROXY_TYPES, proxiedFetch } from './corsProxy.js';
 import { annotateAntiSlop, shouldScoreAntiSlop } from './antiSlop.js';
 import { isProxiedUrl, secureRandomInt } from '../utils/utils.js';
 
@@ -227,10 +227,14 @@ const IMAGE_PROXY_CHAIN = [
     PROXY_TYPES.CORS_LOL,
 ];
 
+function getImageProxyChain() {
+    return filterProxyChainBySettings(IMAGE_PROXY_CHAIN);
+}
+
 async function checkImageExists(url) {
     let sawForbidden = false;
 
-    for (const proxyType of IMAGE_PROXY_CHAIN) {
+    for (const proxyType of getImageProxyChain()) {
         try {
             let response;
             if (proxyType === PROXY_TYPES.PUTER) {
@@ -292,13 +296,15 @@ function tryLoadImageWithProxy(imageDiv, originalUrl, proxyIndex = 0, checkedExi
         return;
     }
 
-    if (proxyIndex >= IMAGE_PROXY_CHAIN.length) {
+    const imageProxyChain = getImageProxyChain();
+
+    if (proxyIndex >= imageProxyChain.length) {
         // All proxies failed
         showImageError(imageDiv, 'CORS/Network Error', originalUrl);
         return;
     }
 
-    const proxyType = IMAGE_PROXY_CHAIN[proxyIndex];
+    const proxyType = imageProxyChain[proxyIndex];
     if (proxyType === PROXY_TYPES.PUTER) {
         proxiedFetch(originalUrl, {
             proxyChain: [PROXY_TYPES.PUTER],

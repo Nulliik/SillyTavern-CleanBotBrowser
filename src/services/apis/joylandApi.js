@@ -7,14 +7,14 @@ import { secureRandomToken } from '../../utils/utils.js';
 const API_BASE = 'https://api.joyland.ai';
 const joylandDetailCache = new Map();
 const JOYLAND_GET_PROXY_CHAIN = [
-    PROXY_TYPES.PLUGIN,
+    PROXY_TYPES.SILLYTAVERN,
     PROXY_TYPES.CORS_EU_ORG,
     PROXY_TYPES.CORSPROXY_IO,
     PROXY_TYPES.CORS_LOL,
     PROXY_TYPES.PUTER,
 ];
 const JOYLAND_POST_PROXY_CHAIN = [
-    PROXY_TYPES.PLUGIN,
+    PROXY_TYPES.SILLYTAVERN,
     PROXY_TYPES.CORSPROXY_IO,
     PROXY_TYPES.PUTER,
     PROXY_TYPES.CORS_EU_ORG,

@@ -5,7 +5,7 @@ import { PROXY_TYPES, getAuthHeadersForService, getProxyChainForService, proxied
 
 const BASE = 'https://crushon.ai/api/trpc';
 const CRUSHON_CREATOR_PROXY_CHAIN = [
-    PROXY_TYPES.PLUGIN,
+    PROXY_TYPES.SILLYTAVERN,
     PROXY_TYPES.CORS_EU_ORG,
     PROXY_TYPES.CORSPROXY_IO,
     PROXY_TYPES.CORS_LOL,
@@ -188,7 +188,7 @@ function getCrushonProxyChain(proxyChain = null) {
 function buildCrushonAuthRelayGuidance(operation, directTransportError = null) {
     const directMessage = String(directTransportError?.message || '').trim();
     const detail = directMessage ? ` Direct auth transports failed first: ${directMessage}` : '';
-    return `${operation} could not be loaded through the CleanBotBrowser plugin. Public CORS relay fallback is disabled for authenticated requests in this cleaned build.${detail}`;
+    return `${operation} could not be loaded through trusted transports. Public CORS relay fallback is disabled for authenticated requests in this cleaned build.${detail}`;
 }
 
 function buildCrushonSearchHeaders(options = {}) {
@@ -314,7 +314,7 @@ async function fetchTrpcViaCrushonAuthRelay(procedure, input, options = {}) {
     const publicAuthHeaders = getCrushonPublicRelayAuthHeaders();
     const attempts = [
         {
-            proxyChain: [PROXY_TYPES.PLUGIN],
+            proxyChain: [PROXY_TYPES.SILLYTAVERN],
             allowPublicAuth: false,
         },
     ];
@@ -870,7 +870,7 @@ async function fetchCrushonProfilePageHtml(userId) {
         try {
             const response = await proxiedFetch(url, {
                 // Treat creator profile HTML as a public page so CleanBotBrowser does not
-                // accidentally prioritize auth-bearing transports like Puter/plugin first.
+                // accidentally prioritize auth-bearing transports like Puter first.
                 service: 'default',
                 proxyChain: [proxyType],
                 fetchOptions: {

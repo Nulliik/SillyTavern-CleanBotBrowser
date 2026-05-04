@@ -16,7 +16,7 @@ import { getBotifyBot, transformFullBotifyBot } from '../../services/apis/botify
 import { transformFullJoylandBot } from '../../services/apis/joylandApi.js';
 import { transformFullSpicychatCharacter } from '../../services/apis/spicychatApi.js';
 import { getTalkieCharacter, transformFullTalkieCharacter } from '../../services/apis/talkieApi.js';
-import { buildProxyUrl, PROXY_TYPES, proxiedFetch } from '../../services/corsProxy.js';
+import { buildProxyUrl, filterProxyChainBySettings, PROXY_TYPES, proxiedFetch } from '../../services/corsProxy.js';
 import { showLocalCharacterEditor, showLocalLorebookEditor } from './localEditors.js';
 import { getSourceUrl, isProxiedUrl } from '../../utils/utils.js';
 import {
@@ -811,6 +811,10 @@ const IMAGE_PROXY_CHAIN = [
     PROXY_TYPES.CORS_LOL,
 ];
 
+function getDetailImageProxyChain() {
+    return filterProxyChainBySettings(IMAGE_PROXY_CHAIN);
+}
+
 function revokeDetailObjectUrlIfAny(imageDiv) {
     const objectUrl = imageDiv?.dataset?.objectUrl;
     if (!objectUrl) return;
@@ -821,7 +825,7 @@ function revokeDetailObjectUrlIfAny(imageDiv) {
 async function checkDetailImageExists(url) {
     let sawForbidden = false;
 
-    for (const proxyType of IMAGE_PROXY_CHAIN) {
+    for (const proxyType of getDetailImageProxyChain()) {
         try {
             let response;
             if (proxyType === PROXY_TYPES.PUTER) {
@@ -876,13 +880,15 @@ function tryDetailImageWithProxy(imageDiv, originalUrl, proxyIndex = 0, checkedE
         return;
     }
 
-    if (proxyIndex >= IMAGE_PROXY_CHAIN.length) {
+    const imageProxyChain = getDetailImageProxyChain();
+
+    if (proxyIndex >= imageProxyChain.length) {
         // All proxies failed
         showDetailImageError(imageDiv, 'CORS/Network Error', originalUrl);
         return;
     }
 
-    const proxyType = IMAGE_PROXY_CHAIN[proxyIndex];
+    const proxyType = imageProxyChain[proxyIndex];
     if (proxyType === PROXY_TYPES.PUTER) {
         proxiedFetch(originalUrl, {
             proxyChain: [PROXY_TYPES.PUTER],

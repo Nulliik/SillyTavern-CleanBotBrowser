@@ -5,7 +5,6 @@
  * Available CORS proxy types
  */
 export const PROXY_TYPES = {
-    PLUGIN: 'plugin',
     SILLYTAVERN: 'sillytavern',
     PUTER: 'puter',
     CORSPROXY_IO: 'corsproxy_io',
@@ -13,6 +12,8 @@ export const PROXY_TYPES = {
     CORS_LOL: 'cors_lol',
     NONE: 'none'
 };
+
+const CORS_PROXY_SETTINGS_GLOBAL = '__CLEANBOTBROWSER_CORS_PROXY_SETTINGS';
 
 const PUBLIC_RELAY_PROXY_CHAIN = [
     PROXY_TYPES.CORS_EU_ORG,
@@ -33,8 +34,7 @@ const SENSITIVE_HEADER_NAMES = new Set([
     'x-xsrf-token',
 ]);
 
-const PLUGIN_FIRST_PROXY_CHAIN = [
-    PROXY_TYPES.PLUGIN,
+const LOCAL_FIRST_PROXY_CHAIN = [
     PROXY_TYPES.SILLYTAVERN,
     PROXY_TYPES.CORS_EU_ORG,
     PROXY_TYPES.CORSPROXY_IO,
@@ -43,19 +43,122 @@ const PLUGIN_FIRST_PROXY_CHAIN = [
 
 const DIRECT_FIRST_PROXY_CHAIN = [
     PROXY_TYPES.NONE,
-    ...PLUGIN_FIRST_PROXY_CHAIN,
+    ...LOCAL_FIRST_PROXY_CHAIN,
 ];
+
+export const CORS_PROXY_SETTING_DEFINITIONS = [
+    {
+        type: PROXY_TYPES.SILLYTAVERN,
+        name: 'SillyTavern CORS Proxy',
+        description: 'Uses the built-in /proxy endpoint from your SillyTavern server.',
+    },
+    {
+        type: PROXY_TYPES.CORS_EU_ORG,
+        name: 'cors.eu.org',
+        description: 'Public relay fallback for browse-only requests without private headers.',
+    },
+    {
+        type: PROXY_TYPES.CORSPROXY_IO,
+        name: 'corsproxy.io',
+        description: 'Public relay fallback that can pass limited non-sensitive request headers.',
+    },
+    {
+        type: PROXY_TYPES.CORS_LOL,
+        name: 'cors.lol',
+        description: 'Public relay fallback for simple unauthenticated API and image requests.',
+    },
+    {
+        type: PROXY_TYPES.NONE,
+        name: 'Direct browser fetch',
+        description: 'Try the API directly before or after proxies when a service allows browser CORS.',
+    },
+];
+
+const DEFAULT_CORS_PROXY_ORDER = Object.freeze(
+    CORS_PROXY_SETTING_DEFINITIONS.map(({ type }) => type)
+);
+
+const DEFAULT_CORS_PROXY_SETTINGS = Object.freeze({
+    [PROXY_TYPES.SILLYTAVERN]: true,
+    [PROXY_TYPES.CORS_EU_ORG]: true,
+    [PROXY_TYPES.CORSPROXY_IO]: true,
+    [PROXY_TYPES.CORS_LOL]: true,
+    [PROXY_TYPES.PUTER]: false,
+    [PROXY_TYPES.NONE]: true,
+});
+
+let corsProxySettings = { ...DEFAULT_CORS_PROXY_SETTINGS };
+
+export function getDefaultCorsProxySettings() {
+    return {
+        ...DEFAULT_CORS_PROXY_SETTINGS,
+        order: [...DEFAULT_CORS_PROXY_ORDER],
+    };
+}
+
+export function normalizeCorsProxySettings(settings = {}) {
+    const normalized = getDefaultCorsProxySettings();
+    if (settings && typeof settings === 'object') {
+        for (const proxyType of Object.keys(DEFAULT_CORS_PROXY_SETTINGS)) {
+            if (settings[proxyType] !== undefined) {
+                normalized[proxyType] = settings[proxyType] !== false;
+            }
+        }
+
+        if (Array.isArray(settings.order)) {
+            const knownTypes = new Set(Object.keys(DEFAULT_CORS_PROXY_SETTINGS));
+            const seen = new Set();
+            normalized.order = settings.order
+                .filter((proxyType) => knownTypes.has(proxyType) && !seen.has(proxyType) && seen.add(proxyType))
+                .concat(DEFAULT_CORS_PROXY_ORDER.filter((proxyType) => !seen.has(proxyType)));
+        }
+    }
+    return normalized;
+}
+
+export function configureCorsProxySettings(settings = {}) {
+    corsProxySettings = normalizeCorsProxySettings(settings);
+    if (typeof window !== 'undefined') {
+        window[CORS_PROXY_SETTINGS_GLOBAL] = { ...corsProxySettings };
+    }
+    return { ...corsProxySettings };
+}
+
+export function getCorsProxySettings() {
+    if (typeof window !== 'undefined') {
+        const globalSettings = window[CORS_PROXY_SETTINGS_GLOBAL];
+        if (globalSettings && typeof globalSettings === 'object') {
+            corsProxySettings = normalizeCorsProxySettings(globalSettings);
+        }
+    }
+    return { ...corsProxySettings };
+}
+
+export function isProxyTypeEnabled(proxyType) {
+    return getCorsProxySettings()[proxyType] !== false;
+}
+
+export function filterProxyChainBySettings(proxyChain = []) {
+    const settings = getCorsProxySettings();
+    const order = Array.isArray(settings.order) ? settings.order : DEFAULT_CORS_PROXY_ORDER;
+    const orderIndex = new Map(order.map((proxyType, index) => [proxyType, index]));
+
+    return (Array.isArray(proxyChain) ? proxyChain : [])
+        .map((proxyType, chainIndex) => ({ proxyType, chainIndex }))
+        .filter(({ proxyType }) => settings[proxyType] !== false)
+        .sort((a, b) => {
+            const aRank = orderIndex.has(a.proxyType) ? orderIndex.get(a.proxyType) : Number.MAX_SAFE_INTEGER;
+            const bRank = orderIndex.has(b.proxyType) ? orderIndex.get(b.proxyType) : Number.MAX_SAFE_INTEGER;
+            return aRank - bRank || a.chainIndex - b.chainIndex;
+        })
+        .map(({ proxyType }) => proxyType);
+}
 
 /**
  * Proxy configurations
  * Each proxy has different rate limits and compatibility
  */
 const PROXY_CONFIGS = {
-    [PROXY_TYPES.PLUGIN]: {
-        name: 'CleanBotBrowser Plugin',
-        buildUrl: null,
-        rateLimit: 'Local SillyTavern server plugin'
-    },
     [PROXY_TYPES.SILLYTAVERN]: {
         name: 'SillyTavern CORS Proxy',
         buildUrl: (targetUrl) => `/proxy/${encodeURIComponent(targetUrl)}`,
@@ -106,100 +209,95 @@ const PROXY_CONFIGS = {
  * Public relay fallbacks are only used when explicitly enabled.
  */
 const SERVICE_PROXY_MAP = {
-    // JannyAI - prefer the local plugin first, then the working public relays,
-    // and public relays when explicitly enabled.
-    jannyai: PLUGIN_FIRST_PROXY_CHAIN,
-    jannyai_trending: PLUGIN_FIRST_PROXY_CHAIN,
+    // JannyAI - prefer the local SillyTavern proxy first, then the working public relays.
+    jannyai: LOCAL_FIRST_PROXY_CHAIN,
+    jannyai_trending: LOCAL_FIRST_PROXY_CHAIN,
 
-    // Character Tavern - plugin first, then the working public relay chain.
-    character_tavern: PLUGIN_FIRST_PROXY_CHAIN,
-    character_tavern_trending: PLUGIN_FIRST_PROXY_CHAIN,
+    // Character Tavern - local proxy first, then the working public relay chain.
+    character_tavern: LOCAL_FIRST_PROXY_CHAIN,
+    character_tavern_trending: LOCAL_FIRST_PROXY_CHAIN,
 
-    // Wyvern - plugin first, then the working public relay chain.
-    wyvern: PLUGIN_FIRST_PROXY_CHAIN,
-    wyvern_trending: PLUGIN_FIRST_PROXY_CHAIN,
+    // Wyvern - local proxy first, then the working public relay chain.
+    wyvern: LOCAL_FIRST_PROXY_CHAIN,
+    wyvern_trending: LOCAL_FIRST_PROXY_CHAIN,
 
     // Chub - avoid direct attempts to prevent noisy CORS console errors; proxies are required for many endpoints.
-    chub: PLUGIN_FIRST_PROXY_CHAIN,
-    chub_gateway: PLUGIN_FIRST_PROXY_CHAIN,
-    chub_public: PLUGIN_FIRST_PROXY_CHAIN,
-    chub_trending: PLUGIN_FIRST_PROXY_CHAIN,
+    chub: LOCAL_FIRST_PROXY_CHAIN,
+    chub_gateway: LOCAL_FIRST_PROXY_CHAIN,
+    chub_public: LOCAL_FIRST_PROXY_CHAIN,
+    chub_trending: LOCAL_FIRST_PROXY_CHAIN,
 
-    // RisuRealm - plugin first, then the working public relay chain.
-    risuai_realm: PLUGIN_FIRST_PROXY_CHAIN,
-    risuai_realm_trending: PLUGIN_FIRST_PROXY_CHAIN,
+    // RisuRealm - local proxy first, then the working public relay chain.
+    risuai_realm: LOCAL_FIRST_PROXY_CHAIN,
+    risuai_realm_trending: LOCAL_FIRST_PROXY_CHAIN,
 
     // MLPChag (neocities) - CORS is allowed; do not proxy by default.
     mlpchag: [PROXY_TYPES.NONE],
 
     // /aicg/ live feed (Neocities HTML pages) - direct fetch is blocked from the standalone app.
-    anchorhold_live: [PROXY_TYPES.PLUGIN, PROXY_TYPES.SILLYTAVERN, PROXY_TYPES.CORS_EU_ORG, PROXY_TYPES.CORSPROXY_IO, PROXY_TYPES.CORS_LOL],
+    anchorhold_live: LOCAL_FIRST_PROXY_CHAIN,
 
     // Hosted Character Archive frontend - usually CORS-enabled Flask, so try direct first.
     character_archive: DIRECT_FIRST_PROXY_CHAIN,
 
-    // Backyard.ai - plugin first, then the working public relay chain.
-    backyard: PLUGIN_FIRST_PROXY_CHAIN,
-    backyard_trending: PLUGIN_FIRST_PROXY_CHAIN,
+    // Backyard.ai - local proxy first, then the working public relay chain.
+    backyard: LOCAL_FIRST_PROXY_CHAIN,
+    backyard_trending: LOCAL_FIRST_PROXY_CHAIN,
 
     // Pygmalion.chat - direct fetch often fails CORS; use proxies to avoid preflight errors in console.
-    pygmalion: PLUGIN_FIRST_PROXY_CHAIN,
-    pygmalion_trending: PLUGIN_FIRST_PROXY_CHAIN,
+    pygmalion: LOCAL_FIRST_PROXY_CHAIN,
+    pygmalion_trending: LOCAL_FIRST_PROXY_CHAIN,
 
     // Sakura.fm
-    sakura: PLUGIN_FIRST_PROXY_CHAIN,
+    sakura: LOCAL_FIRST_PROXY_CHAIN,
 
     // Saucepan.ai
-    saucepan: PLUGIN_FIRST_PROXY_CHAIN,
+    saucepan: LOCAL_FIRST_PROXY_CHAIN,
 
     // BotBooru - public gallery JSON and PNG downloads; keep local/ST fallbacks for CORS-restricted browsers.
     botbooru: DIRECT_FIRST_PROXY_CHAIN,
 
     // CrushOn.ai - Cloudflare + tRPC
-    crushon: PLUGIN_FIRST_PROXY_CHAIN,
+    crushon: LOCAL_FIRST_PROXY_CHAIN,
 
     // Harpy.chat - Supabase has CORS headers but custom headers need proxy
     harpy: DIRECT_FIRST_PROXY_CHAIN,
 
     // Botify.ai - public Strapi JSON with working CORS in the standalone/ST iframe UI.
-    // Go direct first and keep only local/plugin-style fallbacks to avoid slow public relay hangs.
-    botify: [PROXY_TYPES.NONE, PROXY_TYPES.PLUGIN, PROXY_TYPES.SILLYTAVERN],
+    // Go direct first and keep only local fallbacks to avoid slow public relay hangs.
+    botify: [PROXY_TYPES.NONE, PROXY_TYPES.SILLYTAVERN],
+
+    // QuillGen - public browse API, with optional auth for user-owned cards.
+    quillgen: DIRECT_FIRST_PROXY_CHAIN,
 
     // BOT3 AI - SSR HTML pages, anonymous browse OK
-    bot3: PLUGIN_FIRST_PROXY_CHAIN,
+    bot3: LOCAL_FIRST_PROXY_CHAIN,
 
     // xoul.ai - public JSON API with CORS
     xoul: DIRECT_FIRST_PROXY_CHAIN,
 
     // PolyBuzz - public pages now respond cleanly to direct browser fetches in the
-    // standalone/ST runtime. Go direct first so rich-card hydration does not pile
-    // into plugin 502s or public relay rate limits under parallel fetches.
-    polybuzz: [PROXY_TYPES.NONE, PROXY_TYPES.PLUGIN, PROXY_TYPES.SILLYTAVERN],
+    // standalone/ST runtime. Go direct first so rich-card hydration avoids public relay rate limits.
+    polybuzz: [PROXY_TYPES.NONE, PROXY_TYPES.SILLYTAVERN],
 
     // Joyland.ai - POST-based API
-    joyland: PLUGIN_FIRST_PROXY_CHAIN,
+    joyland: LOCAL_FIRST_PROXY_CHAIN,
 
     // SpicyChat.ai - Typesense (direct fetch blocked by CORS from browser)
-    spicychat: PLUGIN_FIRST_PROXY_CHAIN,
+    spicychat: LOCAL_FIRST_PROXY_CHAIN,
 
     // Talkie AI - MiniMax platform, requires signed headers (custom x-token/x-sign).
-    talkie: [PROXY_TYPES.PLUGIN, PROXY_TYPES.SILLYTAVERN, PROXY_TYPES.CORS_EU_ORG, PROXY_TYPES.CORSPROXY_IO, PROXY_TYPES.CORS_LOL],
+    talkie: LOCAL_FIRST_PROXY_CHAIN,
 
     // CAIBotList - HTML pages + HTMX
-    caibotlist: PLUGIN_FIRST_PROXY_CHAIN,
-    caibotlist_trending: PLUGIN_FIRST_PROXY_CHAIN,
+    caibotlist: LOCAL_FIRST_PROXY_CHAIN,
+    caibotlist_trending: LOCAL_FIRST_PROXY_CHAIN,
 
     // Default fallback chain
-    default: PLUGIN_FIRST_PROXY_CHAIN
+    default: LOCAL_FIRST_PROXY_CHAIN
 };
 
-let pluginProbePromise = null;
-let pluginAvailable = null;
-let csrfTokenPromise = null;
-let csrfTokenCache = null;
-
 const DEFAULT_TIMEOUT_MS = 15000;
-const CSRF_CACHE_TTL_MS = 10000;
 
 function isDebugEnabled() {
     return typeof window !== 'undefined' && window.__BOT_BROWSER_DEBUG === true;
@@ -217,125 +315,12 @@ function debugWarn(...args) {
     if (isDebugEnabled()) console.warn(...args);
 }
 
-async function probeCleanBotBrowserPlugin() {
-    try {
-        if (typeof window !== 'undefined') {
-            const globalStatus = window.__BOT_BROWSER_PLUGIN_STATUS;
-            if (globalStatus === 'installed') {
-                pluginAvailable = true;
-                return true;
-            }
-            if (globalStatus === 'missing' && pluginAvailable !== true) {
-                pluginAvailable = false;
-                return false;
-            }
-        }
-    } catch {
-        // Ignore window/global access issues and fall back to direct probing.
-    }
-
-    if (pluginAvailable !== null) {
-        return pluginAvailable;
-    }
-
-    if (pluginProbePromise) {
-        return pluginProbePromise;
-    }
-
-    pluginProbePromise = (async () => {
-        try {
-            const response = await fetch('/api/plugins/bot-browser/probe', {
-                method: 'GET',
-                credentials: 'same-origin',
-            });
-            if (response.ok) {
-                pluginAvailable = true;
-            } else if (pluginAvailable !== true) {
-                pluginAvailable = false;
-            }
-        } catch {
-            if (pluginAvailable !== true) {
-                pluginAvailable = false;
-            }
-        } finally {
-            pluginProbePromise = null;
-        }
-
-        return pluginAvailable === true;
-    })();
-
-    return pluginProbePromise;
-}
-
-export function clearCleanBotBrowserPluginProbeCache() {
-    pluginAvailable = null;
-    pluginProbePromise = null;
-}
-
-export async function isCleanBotBrowserPluginAvailable() {
-    return probeCleanBotBrowserPlugin();
-}
-
 function headersToObject(headers) {
     if (!headers) return {};
     if (headers instanceof Headers) return Object.fromEntries(headers.entries());
     if (Array.isArray(headers)) return Object.fromEntries(headers);
     if (typeof headers === 'object') return { ...headers };
     return {};
-}
-
-function readCsrfHeaderValue(headers) {
-    const headerMap = headersToObject(headers);
-    const token = String(headerMap['X-CSRF-Token'] || headerMap['x-csrf-token'] || '').trim();
-    return token || null;
-}
-
-async function fetchCsrfTokenFromEndpoint({ forceRefresh = false } = {}) {
-    if (typeof window === 'undefined') return null;
-
-    if (!forceRefresh && csrfTokenCache && (Date.now() - csrfTokenCache.fetchedAt) < CSRF_CACHE_TTL_MS) {
-        return csrfTokenCache.token;
-    }
-
-    if (!forceRefresh && csrfTokenPromise) {
-        return csrfTokenPromise;
-    }
-
-    csrfTokenPromise = (async () => {
-        try {
-            const response = await fetch('/csrf-token', {
-                method: 'GET',
-                cache: 'no-store',
-                credentials: 'same-origin',
-            });
-            const contentType = String(response.headers.get('content-type') || '').toLowerCase();
-            if (!response.ok || !contentType.includes('application/json')) {
-                csrfTokenCache = {
-                    token: null,
-                    fetchedAt: Date.now(),
-                };
-                return null;
-            }
-
-            const data = await response.json();
-            const token = String(data?.token || '').trim() || null;
-            csrfTokenCache = {
-                token,
-                fetchedAt: Date.now(),
-            };
-            return token;
-        } catch {
-            csrfTokenCache = {
-                token: null,
-                fetchedAt: Date.now(),
-            };
-            return null;
-        } finally {
-            csrfTokenPromise = null;
-        }
-    })();
-
-    return csrfTokenPromise;
 }
 
 function stripSensitiveHeadersForPublicProxy(headers, authHeaderObj) {
@@ -370,66 +355,6 @@ function getGlobalAuthHeadersForService(service) {
 
 function isPublicRelayFallbackEnabled() {
     return true;
-}
-
-async function getSillyTavernRequestHeaders({ forceRefresh = false } = {}) {
-    if (typeof window === 'undefined') return {};
-
-    const windowsToTry = [];
-    const seen = new Set();
-    let resolvedHeaders = {};
-
-    const pushCandidateWindow = (candidateWindow) => {
-        if (!candidateWindow) return;
-        if (seen.has(candidateWindow)) return;
-        seen.add(candidateWindow);
-        windowsToTry.push(candidateWindow);
-    };
-
-    pushCandidateWindow(window);
-    try {
-        if (window.parent && window.parent !== window) {
-            pushCandidateWindow(window.parent);
-        }
-    } catch {
-        // Ignore parent access issues.
-    }
-
-    try {
-        if (window.opener && window.opener !== window) {
-            pushCandidateWindow(window.opener);
-        }
-    } catch {
-        // Ignore opener access issues.
-    }
-
-    for (const candidateWindow of windowsToTry) {
-        try {
-            const scriptModule = await import('/script.js');
-            if (typeof scriptModule?.getRequestHeaders === 'function') {
-                const headers = headersToObject(await scriptModule.getRequestHeaders({ omitContentType: true }));
-                if (readCsrfHeaderValue(headers) && !forceRefresh) {
-                    return headers;
-                }
-                resolvedHeaders = {
-                    ...resolvedHeaders,
-                    ...headers,
-                };
-            }
-        } catch {
-            // Try the next accessible window context.
-        }
-    }
-
-    const freshCsrfToken = await fetchCsrfTokenFromEndpoint({ forceRefresh });
-    if (freshCsrfToken) {
-        return {
-            ...resolvedHeaders,
-            'X-CSRF-Token': freshCsrfToken,
-        };
-    }
-
-    return resolvedHeaders;
 }
 
 /**
@@ -470,105 +395,6 @@ async function ensurePuterLoaded() {
     return false;
 }
 
-function serializePluginBody(body, headers = {}) {
-    if (body == null) {
-        return { body: null, bodyType: null, headers };
-    }
-
-    if (body instanceof URLSearchParams) {
-        return {
-            body: body.toString(),
-            bodyType: 'text',
-            headers: headers['Content-Type'] || headers['content-type']
-                ? headers
-                : { ...headers, 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-        };
-    }
-
-    if (typeof body === 'string') {
-        return { body, bodyType: 'text', headers };
-    }
-
-    if (body instanceof ArrayBuffer) {
-        const bytes = new Uint8Array(body);
-        const chunkSize = 0x8000;
-        let binary = '';
-        for (let i = 0; i < bytes.length; i += chunkSize) {
-            binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-        }
-        return { body: btoa(binary), bodyType: 'base64', headers };
-    }
-
-    if (ArrayBuffer.isView(body)) {
-        const bytes = new Uint8Array(body.buffer, body.byteOffset, body.byteLength);
-        const chunkSize = 0x8000;
-        let binary = '';
-        for (let i = 0; i < bytes.length; i += chunkSize) {
-            binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-        }
-        return { body: btoa(binary), bodyType: 'base64', headers };
-    }
-
-    return {
-        body: typeof body === 'object' ? JSON.stringify(body) : String(body),
-        bodyType: 'json',
-        headers: headers['Content-Type'] || headers['content-type']
-            ? headers
-            : { ...headers, 'Content-Type': 'application/json' },
-    };
-}
-
-async function pluginFetch(url, options = {}, timeoutMs = DEFAULT_TIMEOUT_MS) {
-    if (!(await probeCleanBotBrowserPlugin())) {
-        throw new Error('CleanBotBrowser plugin is not available');
-    }
-
-    const requestHeaders = headersToObject(options.headers);
-    const { body, bodyType, headers } = serializePluginBody(options.body, requestHeaders);
-
-    const payload = {
-        url,
-        method: options.method || 'GET',
-        headers,
-        body,
-        bodyType,
-        timeoutMs,
-    };
-
-    const runPluginFetch = async (forceRefreshHeaders = false) => {
-        const stRequestHeaders = await getSillyTavernRequestHeaders({ forceRefresh: forceRefreshHeaders });
-
-        const { fetchOptions: timedOptions, cleanup } = withTimeout({
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: {
-                ...stRequestHeaders,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(payload),
-        }, timeoutMs + 2000);
-
-        try {
-            return await fetch('/api/plugins/bot-browser/fetch', timedOptions);
-        } finally {
-            cleanup();
-        }
-    };
-
-    let response = await runPluginFetch(false);
-    if (response.status !== 403) {
-        return response;
-    }
-
-    const responseText = await response.clone().text().catch(() => '');
-    if (!/csrf/i.test(responseText)) {
-        return response;
-    }
-
-    response = await runPluginFetch(true);
-    return response;
-}
-
 /**
  * Fetch using Puter.js (disabled in this cleaned build)
  * @param {string} url - Target URL
@@ -586,6 +412,10 @@ async function puterFetch(url, options = {}, timeoutMs = 15000) {
  * @returns {string|null} Proxied URL or null if not applicable
  */
 export function buildProxyUrl(proxyType, targetUrl, options = {}) {
+    if (!options?.ignoreSettings && !isProxyTypeEnabled(proxyType)) {
+        return null;
+    }
+
     if (proxyType === PROXY_TYPES.PUTER) {
         return null;
     }
@@ -603,7 +433,7 @@ export function buildProxyUrl(proxyType, targetUrl, options = {}) {
  * @returns {string[]} Array of proxy types to try
  */
 export function getProxyChainForService(service) {
-    return SERVICE_PROXY_MAP[service] || SERVICE_PROXY_MAP.default;
+    return filterProxyChainBySettings(SERVICE_PROXY_MAP[service] || SERVICE_PROXY_MAP.default);
 }
 
 function withTimeout(fetchOptions, timeoutMs) {
@@ -652,15 +482,8 @@ export async function proxiedFetch(url, options = {}) {
     const hasRequestSensitiveHeaders = hasSensitiveHeaders(requestHeaderObj);
     const hasCookieAuthHeaders = Object.keys(authHeaderObj).some((key) => /^cookie$/i.test(String(key || '').trim()));
 
-    let proxies = proxyChain || getProxyChainForService(service);
-    const pluginReady = proxies.includes(PROXY_TYPES.PLUGIN)
-        ? await probeCleanBotBrowserPlugin().catch(() => false)
-        : false;
+    let proxies = filterProxyChainBySettings(proxyChain || getProxyChainForService(service));
     const allowPublicRelayFallback = isPublicRelayFallbackEnabled();
-
-    if (!pluginReady) {
-        proxies = proxies.filter((proxyType) => proxyType !== PROXY_TYPES.PLUGIN);
-    }
 
     if (!allowPublicRelayFallback) {
         proxies = proxies.filter((proxyType) => !PUBLIC_RELAY_PROXY_TYPES.has(proxyType));
@@ -675,12 +498,12 @@ export async function proxiedFetch(url, options = {}) {
     if (hasAuthHeaders && !allowPublicAuth) {
         const preferred = [];
         if (hasCookieAuthHeaders) {
-            if (proxies.includes(PROXY_TYPES.PLUGIN)) preferred.push(PROXY_TYPES.PLUGIN);
+            if (proxies.includes(PROXY_TYPES.SILLYTAVERN)) preferred.push(PROXY_TYPES.SILLYTAVERN);
             if (proxies.includes(PROXY_TYPES.PUTER)) preferred.push(PROXY_TYPES.PUTER);
             if (proxies.includes(PROXY_TYPES.NONE)) preferred.push(PROXY_TYPES.NONE);
         } else {
             if (proxies.includes(PROXY_TYPES.NONE)) preferred.push(PROXY_TYPES.NONE);
-            if (proxies.includes(PROXY_TYPES.PLUGIN)) preferred.push(PROXY_TYPES.PLUGIN);
+            if (proxies.includes(PROXY_TYPES.SILLYTAVERN)) preferred.push(PROXY_TYPES.SILLYTAVERN);
             if (proxies.includes(PROXY_TYPES.PUTER)) preferred.push(PROXY_TYPES.PUTER);
         }
         const rest = proxies.filter((p) => !preferred.includes(p));
@@ -693,7 +516,7 @@ export async function proxiedFetch(url, options = {}) {
         ? { ...authHeaderObj, ...publicAuthHeaderObj }
         : authHeaderObj;
 
-    // Apply auth headers only to trusted transports: direct fetches or the local plugin.
+    // Apply auth headers only to trusted transports: direct fetches or the local SillyTavern proxy.
     const directHeaders = (hasAuthHeaders || hasPublicAuthHeaders)
         ? { ...trustedAuthHeaderObj, ...requestHeaderObj }
         : requestHeaderObj;
@@ -719,8 +542,6 @@ export async function proxiedFetch(url, options = {}) {
                 } finally {
                     cleanup();
                 }
-            } else if (proxyType === PROXY_TYPES.PLUGIN) {
-                response = await pluginFetch(url, directFetchOptions, timeoutMs);
             } else if (proxyType === PROXY_TYPES.PUTER) {
                 if (!isPuterEnabled()) {
                     continue;
@@ -739,7 +560,10 @@ export async function proxiedFetch(url, options = {}) {
                     continue;
                 }
                 debugLog(`[CORS Proxy] Trying ${PROXY_CONFIGS[proxyType].name} for: ${url}`);
-                const { fetchOptions: timedOptions, cleanup } = withTimeout(proxyFetchOptions, timeoutMs);
+                const fetchOptionsForProxy = proxyType === PROXY_TYPES.SILLYTAVERN
+                    ? directFetchOptions
+                    : proxyFetchOptions;
+                const { fetchOptions: timedOptions, cleanup } = withTimeout(fetchOptionsForProxy, timeoutMs);
                 try {
                     response = await fetch(proxyUrl, timedOptions);
                 } finally {
