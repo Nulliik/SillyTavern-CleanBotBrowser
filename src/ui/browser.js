@@ -26,9 +26,9 @@ import { searchBotbooruPosts, transformBotbooruCard, botbooruApiState, resetBotb
 import { browseCrushonCharacters, searchCrushonCharacters, transformCrushonCard, crushonApiState, resetCrushonState } from '../services/apis/crushonApi.js';
 import { searchHarpyCharacters, transformHarpyCard, harpyApiState, resetHarpyState } from '../services/apis/harpyApi.js';
 import { searchBotify, transformBotifyCard, botifyApiState, resetBotifyState, BOTIFY_SORT_OPTIONS } from '../services/apis/botifyApi.js';
-import { getJoylandHomepage, browseJoylandBots, transformJoylandHomepageCard, transformJoylandCard, joylandApiState, resetJoylandState, JOYLAND_SORT_TYPES, JOYLAND_CATEGORIES } from '../services/apis/joylandApi.js';
+import { getJoylandHomepage, browseJoylandBots, searchJoylandBots, transformJoylandHomepageCard, transformJoylandCard, joylandApiState, resetJoylandState, JOYLAND_SORT_TYPES, JOYLAND_CATEGORIES } from '../services/apis/joylandApi.js';
 import { searchSpicychat, transformSpicychatCard, spicychatApiState, resetSpicychatState, SPICYCHAT_SORT_OPTIONS } from '../services/apis/spicychatApi.js';
-import { browseTalkieCharacters, transformTalkieCard, talkieApiState, resetTalkieState } from '../services/apis/talkieApi.js';
+import { browseTalkieCharacters, searchTalkieCharacters, transformTalkieCard, talkieApiState, resetTalkieState } from '../services/apis/talkieApi.js';
 
 // JannyAI API state for pagination
 let jannyApiState = {
@@ -146,6 +146,182 @@ function updateResultsCount(menuContent, text) {
     if (countContainer) {
         countContainer.textContent = text;
     }
+}
+
+function parseAllSourcesSearchQuery(value = '') {
+    const includedTags = [];
+    const excludedTags = [];
+    const textParts = [];
+    const tokenRegex = /"([^"]+)"|'([^']+)'|(\S+)/g;
+    const raw = String(value || '');
+    let match;
+
+    while ((match = tokenRegex.exec(raw)) !== null) {
+        const token = match[1] || match[2] || match[3] || '';
+        const prefix = token.charAt(0);
+        const body = token.slice(1).trim();
+
+        if ((prefix === '+' || prefix === '-') && body) {
+            (prefix === '+' ? includedTags : excludedTags).push(body);
+        } else if (token.trim()) {
+            textParts.push(token.trim());
+        }
+    }
+
+    const unique = values => [...new Set(values.map(tag => tag.toLowerCase().trim()).filter(Boolean))];
+    return {
+        text: textParts.join(' ').trim(),
+        includedTags: unique(includedTags),
+        excludedTags: unique(excludedTags),
+    };
+}
+
+function cardMatchesAllSourcesTagQuery(card, includedTags = [], excludedTags = []) {
+    if ((!includedTags.length && !excludedTags.length) || !card) return true;
+
+    const haystack = [
+        ...(Array.isArray(card.tags) ? card.tags : []),
+        card.name,
+        card.creator,
+        card.description,
+        card.desc_preview,
+        card.desc_search,
+    ].map(value => String(value || '').toLowerCase());
+
+    const hasTag = tag => haystack.some(value => value === tag || value.includes(tag));
+    return includedTags.every(hasTag) && !excludedTags.some(hasTag);
+}
+
+function createAllSourcesLiveSearchTasks({ query, hideNsfw }) {
+    const { text, includedTags, excludedTags } = parseAllSourcesSearchQuery(query);
+    const tagString = includedTags.join(',');
+    const excludedTagString = excludedTags.join(',');
+    const includeNsfw = !hideNsfw;
+    const keepTags = cards => (cards || []).filter(card => cardMatchesAllSourcesTagQuery(card, includedTags, excludedTags));
+    const withSource = (cards, sourceService, extra = {}) => keepTags((cards || []).map(card => ({
+        ...card,
+        sourceService: card.sourceService || sourceService,
+        isLiveApi: true,
+        ...extra,
+    })));
+    const task = (label, load) => ({ label, load });
+
+    return [
+        task('JannyAI', () => searchJannyCharacters({
+            search: text || includedTags.join(' '),
+            page: 1,
+            limit: 60,
+            sort: 'createdAtStamp:desc',
+            nsfw: includeNsfw,
+        }).then(result => withSource((result?.results?.[0]?.hits || []).map(transformJannyCard), 'jannyai'))),
+        task('Chub', () => searchChubCards({
+            search: text,
+            limit: 50,
+            sort: 'download_count',
+            nsfw: includeNsfw,
+            tags: tagString,
+            excludeTags: excludedTagString,
+        }).then(result => withSource((result?.data?.nodes || result?.nodes || []).map(transformChubCard), 'chub', { isLiveChub: true }))),
+        task('RisuRealm', () => searchRisuRealm({
+            search: text || includedTags.join(' '),
+            page: 1,
+            sort: 'recommended',
+            nsfw: includeNsfw,
+        }).then(result => withSource((result.cards || []).map(transformRisuRealmCard), 'risuai_realm', { isRisuRealm: true }))),
+        task('Character Tavern', () => searchCharacterTavern({
+            query: text,
+            page: 1,
+            limit: 30,
+            tags: includedTags,
+            excludeTags: excludedTags,
+        }).then(cards => withSource(cards, 'character_tavern'))),
+        task('Wyvern', () => searchWyvernCharacters({
+            search: text,
+            page: 1,
+            limit: 30,
+            sort: 'downloads',
+            order: 'DESC',
+            tags: includedTags,
+            hideNsfw,
+        }).then(result => withSource((result.results || []).map(transformWyvernCard), 'wyvern'))),
+        task('Backyard.ai', () => searchBackyardCharacters({
+            search: text || includedTags.join(' '),
+            sortBy: BACKYARD_SORT_TYPES.POPULAR,
+            type: hideNsfw ? 'sfw' : 'all',
+            tagNames: includedTags,
+        }).then(result => withSource((result.characters || []).map(transformBackyardCard), 'backyard'))),
+        task('Pygmalion', () => searchPygmalionCharacters({
+            query: text,
+            orderBy: PYGMALION_SORT_TYPES.VIEWS,
+            includeSensitive: includeNsfw,
+            pageSize: 40,
+            tagsNamesInclude: includedTags,
+            tagsNamesExclude: excludedTags,
+        }).then(result => withSource((result.characters || []).map(transformPygmalionCard), 'pygmalion'))),
+        task('Sakura.fm', () => searchSakuraCharacters({
+            search: text,
+            sortType: 'message-count',
+            limit: 24,
+            allowNsfw: includeNsfw,
+            tags: includedTags,
+            matchType: 'all',
+            hideExplicit: hideNsfw,
+        }).then(result => withSource((result.characters || []).map(transformSakuraCard), 'sakura'))),
+        task('Saucepan.ai', () => searchSaucepanCompanions({
+            search: text,
+            sort: 'popularity',
+            limit: 24,
+            nsfw: includeNsfw,
+            tags: includedTags,
+            excludedTags,
+            matchAllTags: true,
+        }).then(result => withSource((result.characters || []).map(transformSaucepanCard), 'saucepan'))),
+        task('BotBooru', () => searchBotbooruPosts({
+            search: [text, ...includedTags.map(tag => `tag:${tag}`), ...excludedTags.map(tag => `-${tag}`)].filter(Boolean).join(' '),
+            sort: 'downloads',
+            offset: 0,
+            limit: 24,
+            sfwOnly: hideNsfw !== false,
+        }).then(result => withSource((result.posts || []).map(transformBotbooruCard), 'botbooru'))),
+        task('CrushOn.AI', () => searchCrushonCharacters({
+            query: text || includedTags.join(' '),
+            nsfw: includeNsfw,
+            count: 24,
+        }).then(result => withSource((result.characters || []).map(transformCrushonCard), 'crushon'))),
+        task('Botify.ai', () => searchBotify({
+            search: text || includedTags.join(' '),
+            sort: BOTIFY_SORT_OPTIONS.POPULAR,
+            sfwOnly: hideNsfw !== false,
+            page: 1,
+            pageSize: 24,
+        }).then(result => withSource((result.characters || []).map(transformBotifyCard), 'botify'))),
+        task('Joyland.ai', () => searchJoylandBots({
+            search: text || includedTags.join(' '),
+            page: 1,
+            size: 24,
+        }).then(result => withSource((result.characters || []).map(transformJoylandCard), 'joyland'))),
+        task('SpicyChat', () => searchSpicychat({
+            search: text || includedTags.join(' '),
+            sort: SPICYCHAT_SORT_OPTIONS.TRENDING,
+            filterNsfw: hideNsfw !== false,
+            page: 1,
+            perPage: 24,
+        }).then(result => withSource((result.characters || []).map(transformSpicychatCard), 'spicychat'))),
+        task('Talkie AI', () => searchTalkieCharacters({
+            search: text || includedTags.join(' '),
+            count: 24,
+        }).then(result => withSource((result.characters || []).map(transformTalkieCard), 'talkie'))),
+    ];
+}
+
+async function searchAllSourcesLiveApis({ query, hideNsfw }) {
+    const tasks = createAllSourcesLiveSearchTasks({ query, hideNsfw });
+    const results = await Promise.all(tasks.map(task => task.load().catch(error => {
+        console.warn(`[CleanBotBrowser] All Sources ${task.label} search failed:`, error);
+        return [];
+    })));
+
+    return results.flat();
 }
 
 function mergeHydratedAllSourceCards({ state, menuContent, cards, sourceLabel, showCardDetailFunc, extensionName, extension_settings, runId }) {
@@ -1104,80 +1280,40 @@ function setupBrowserEventListeners(menuContent, state, extensionName, extension
             console.log('[CleanBotBrowser] All Sources search:', state.filters.search);
             try {
                 const hideNsfw = extension_settings[extensionName].hideNsfw;
+                const searchRunId = Date.now();
+                state.allSourcesSearchRunId = searchRunId;
+                state.allSourcesHydrationRunId = null;
+                state.allSourcesHydrating = false;
+                updateResultsCount(menuContent, 'Searching live sources...');
 
                 // Start with local Fuse.js search of the original all-sources set.
                 const baseCards = Array.isArray(state.allSourcesBaseCards) && state.allSourcesBaseCards.length > 0
                     ? state.allSourcesBaseCards
                     : state.currentCards;
-                const localFuse = new Fuse(baseCards, state.fuseOptions);
-                const localResults = localFuse.search(state.filters.search).map(r => r.item);
+                const parsedQuery = parseAllSourcesSearchQuery(state.filters.search);
+                const localSearchText = parsedQuery.text || parsedQuery.includedTags.join(' ') || state.filters.search;
+                const localCandidates = parsedQuery.text || parsedQuery.includedTags.length
+                    ? new Fuse(baseCards, state.fuseOptions).search(localSearchText).map(r => r.item)
+                    : baseCards;
+                const localResults = localCandidates
+                    .filter(card => cardMatchesAllSourcesTagQuery(card, parsedQuery.includedTags, parsedQuery.excludedTags));
+                const allApiCards = await searchAllSourcesLiveApis({
+                    query: state.filters.search,
+                    hideNsfw,
+                });
 
-                // Query live APIs in parallel
-                const apiPromises = [];
-
-                apiPromises.push(
-                    searchJannyCharacters({
-                        search: state.filters.search,
-                        page: 1,
-                        limit: 60,
-                        sort: 'createdAtStamp:desc',
-                        nsfw: !hideNsfw
-                    }).then(result => {
-                        const hits = result?.results?.[0]?.hits || [];
-                        return hits.map(hit => ({
-                            ...transformJannyCard(hit),
-                            sourceService: 'jannyai',
-                            isLiveApi: true
-                        }));
-                    }).catch(error => {
-                        console.warn('[CleanBotBrowser] All Sources JannyAI search failed:', error);
-                        return [];
-                    })
-                );
-
-                apiPromises.push(
-                    searchChubCards({
-                        search: state.filters.search,
-                        limit: 50,
-                        sort: 'download_count',
-                        nsfw: !hideNsfw
-                    }).then(result => {
-                        const nodes = result?.data?.nodes || result?.nodes || [];
-                        return nodes.map(node => ({
-                            ...transformChubCard(node),
-                            sourceService: 'chub',
-                            isLiveChub: true,
-                            isLiveApi: true
-                        }));
-                    }).catch(() => [])
-                );
-
-                apiPromises.push(
-                    searchRisuRealm({
-                        search: state.filters.search,
-                        page: 1,
-                        sort: 'recommended',
-                        nsfw: !hideNsfw
-                    }).then(result =>
-                        result.cards.map(card => ({
-                            ...transformRisuRealmCard(card),
-                            sourceService: 'risuai_realm',
-                            isLiveApi: true,
-                            isRisuRealm: true
-                        }))
-                    ).catch(() => [])
-                );
-
-                // Wait for all API results
-                const apiResults = await Promise.all(apiPromises);
-                const allApiCards = apiResults.flat();
+                if (state.currentService !== 'all' || state.allSourcesSearchRunId !== searchRunId || state.filters.search !== e.target.value) {
+                    return;
+                }
 
                 // Merge local and API results, deduplicate
                 const mergedCards = deduplicateCards([...allApiCards, ...localResults]);
                 console.log(`[CleanBotBrowser] All Sources search: ${localResults.length} local + ${allApiCards.length} API = ${mergedCards.length} unique`);
 
                 state.currentCards = mergedCards;
-                state.fuse = new Fuse(mergedCards, state.fuseOptions);
+                // The merged set is already the text-search result. Keep Fuse off here so
+                // server-ranked API results are not filtered a second time by local fuzzy search.
+                state.fuse = null;
 
                 // Apply client-side filters and sort
                 const filteredCards = applyClientSideFilters(mergedCards, state, extensionName, extension_settings);
@@ -1186,6 +1322,7 @@ function setupBrowserEventListeners(menuContent, state, extensionName, extension
 
                 updateCachedFiltersAndDropdowns(state, menuContent);
                 renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
+                updateResultsCount(menuContent, `${state.filteredCards.length} cards found`);
             } catch (error) {
                 console.error('[CleanBotBrowser] All Sources search failed:', error);
                 // Fall back to local search
@@ -1193,6 +1330,7 @@ function setupBrowserEventListeners(menuContent, state, extensionName, extension
             }
         } else {
             if (state.isAllSources && Array.isArray(state.allSourcesBaseCards) && state.allSourcesBaseCards.length > 0) {
+                state.allSourcesSearchRunId = null;
                 state.currentCards = state.allSourcesBaseCards;
                 state.fuse = null;
             }
