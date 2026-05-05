@@ -16,7 +16,7 @@ import { getBotifyBot, transformFullBotifyBot } from '../../services/apis/botify
 import { transformFullJoylandBot } from '../../services/apis/joylandApi.js';
 import { transformFullSpicychatCharacter } from '../../services/apis/spicychatApi.js';
 import { getTalkieCharacter, transformFullTalkieCharacter } from '../../services/apis/talkieApi.js';
-import { buildProxyUrl, filterProxyChainBySettings, PROXY_TYPES, proxiedFetch } from '../../services/corsProxy.js';
+import { buildProxyUrl, filterProxyChainBySettings, PROXY_TYPES } from '../../services/corsProxy.js';
 import { showLocalCharacterEditor, showLocalLorebookEditor } from './localEditors.js';
 import { getSourceUrl, isProxiedUrl } from '../../utils/utils.js';
 import {
@@ -827,18 +827,9 @@ async function checkDetailImageExists(url) {
 
     for (const proxyType of getDetailImageProxyChain()) {
         try {
-            let response;
-            if (proxyType === PROXY_TYPES.PUTER) {
-                response = await proxiedFetch(url, {
-                    proxyChain: [PROXY_TYPES.PUTER],
-                    fetchOptions: { method: 'HEAD' },
-                    timeoutMs: 10000,
-                });
-            } else {
-                const proxyUrl = buildProxyUrl(proxyType, url);
-                if (!proxyUrl) continue;
-                response = await fetch(proxyUrl, { method: 'HEAD' });
-            }
+            const proxyUrl = buildProxyUrl(proxyType, url);
+            if (!proxyUrl) continue;
+            const response = await fetch(proxyUrl, { method: 'HEAD' });
 
             if (response.ok) {
                 return { exists: true, status: response.status };
@@ -889,29 +880,6 @@ function tryDetailImageWithProxy(imageDiv, originalUrl, proxyIndex = 0, checkedE
     }
 
     const proxyType = imageProxyChain[proxyIndex];
-    if (proxyType === PROXY_TYPES.PUTER) {
-        proxiedFetch(originalUrl, {
-            proxyChain: [PROXY_TYPES.PUTER],
-            fetchOptions: { method: 'GET' },
-            timeoutMs: 15000,
-        }).then(async (resp) => {
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            const blob = await resp.blob();
-            const type = (blob.type || '').toLowerCase();
-            if (type && !type.startsWith('image/')) throw new Error(`Not an image (${type})`);
-            revokeDetailObjectUrlIfAny(imageDiv);
-            const objectUrl = URL.createObjectURL(blob);
-            imageDiv.dataset.objectUrl = objectUrl;
-            imageDiv.style.backgroundImage = `url('${objectUrl}')`;
-            imageDiv.setAttribute('data-image-url', objectUrl);
-            console.log(`[CleanBotBrowser] Detail image loaded via ${proxyType}:`, originalUrl);
-        }).catch(() => {
-            console.log(`[CleanBotBrowser] Detail image ${proxyType} failed for:`, originalUrl);
-            tryDetailImageWithProxy(imageDiv, originalUrl, proxyIndex + 1, true);
-        });
-        return;
-    }
-
     const proxyUrl = buildProxyUrl(proxyType, originalUrl);
 
     if (!proxyUrl) {

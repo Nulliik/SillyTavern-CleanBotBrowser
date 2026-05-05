@@ -39,7 +39,7 @@ function getSaucepanAuthProxyConfig() {
 
     return {
         // Auth-bearing requests must stay on direct/local transports.
-        proxyChain: [PROXY_TYPES.SILLYTAVERN, PROXY_TYPES.CORS_EU_ORG, PROXY_TYPES.CORSPROXY_IO, PROXY_TYPES.PUTER, PROXY_TYPES.NONE, PROXY_TYPES.CORS_LOL],
+        proxyChain: [PROXY_TYPES.SILLYTAVERN, PROXY_TYPES.CORS_EU_ORG, PROXY_TYPES.CORSPROXY_IO, PROXY_TYPES.NONE, PROXY_TYPES.CORS_LOL],
         allowPublicAuth: false,
     };
 }

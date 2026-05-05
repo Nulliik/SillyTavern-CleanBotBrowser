@@ -1,4 +1,4 @@
-import { buildProxyUrl, filterProxyChainBySettings, PROXY_TYPES, proxiedFetch } from './corsProxy.js';
+import { buildProxyUrl, filterProxyChainBySettings, PROXY_TYPES } from './corsProxy.js';
 import { annotateAntiSlop, shouldScoreAntiSlop } from './antiSlop.js';
 import { isProxiedUrl, secureRandomInt } from '../utils/utils.js';
 
@@ -236,18 +236,9 @@ async function checkImageExists(url) {
 
     for (const proxyType of getImageProxyChain()) {
         try {
-            let response;
-            if (proxyType === PROXY_TYPES.PUTER) {
-                response = await proxiedFetch(url, {
-                    proxyChain: [PROXY_TYPES.PUTER],
-                    fetchOptions: { method: 'HEAD' },
-                    timeoutMs: 10000,
-                });
-            } else {
-                const proxyUrl = buildProxyUrl(proxyType, url);
-                if (!proxyUrl) continue;
-                response = await fetch(proxyUrl, { method: 'HEAD' });
-            }
+            const proxyUrl = buildProxyUrl(proxyType, url);
+            if (!proxyUrl) continue;
+            const response = await fetch(proxyUrl, { method: 'HEAD' });
 
             if (response.ok) {
                 return { exists: true, status: response.status };
@@ -305,28 +296,6 @@ function tryLoadImageWithProxy(imageDiv, originalUrl, proxyIndex = 0, checkedExi
     }
 
     const proxyType = imageProxyChain[proxyIndex];
-    if (proxyType === PROXY_TYPES.PUTER) {
-        proxiedFetch(originalUrl, {
-            proxyChain: [PROXY_TYPES.PUTER],
-            fetchOptions: { method: 'GET' },
-            timeoutMs: 15000,
-        }).then(async (resp) => {
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            const blob = await resp.blob();
-            const type = (blob.type || '').toLowerCase();
-            if (type && !type.startsWith('image/')) throw new Error(`Not an image (${type})`);
-            revokeObjectUrlIfAny(imageDiv);
-            const objectUrl = URL.createObjectURL(blob);
-            imageDiv.dataset.objectUrl = objectUrl;
-            imageDiv.style.backgroundImage = `url('${objectUrl}')`;
-            console.log(`[CleanBotBrowser] Image loaded via ${proxyType}:`, originalUrl);
-        }).catch(() => {
-            console.log(`[CleanBotBrowser] ${proxyType} failed for:`, originalUrl);
-            tryLoadImageWithProxy(imageDiv, originalUrl, proxyIndex + 1, true);
-        });
-        return;
-    }
-
     const proxyUrl = buildProxyUrl(proxyType, originalUrl);
 
     if (!proxyUrl) {

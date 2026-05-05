@@ -9,7 +9,6 @@ const CRUSHON_CREATOR_PROXY_CHAIN = [
     PROXY_TYPES.CORS_EU_ORG,
     PROXY_TYPES.CORSPROXY_IO,
     PROXY_TYPES.CORS_LOL,
-    PROXY_TYPES.PUTER,
 ];
 const CRUSHON_PUBLIC_AUTH_PROXY_CHAIN = [PROXY_TYPES.CORSPROXY_IO];
 const CRUSHON_PUBLIC_PROXY_TYPES = new Set([
@@ -399,7 +398,7 @@ async function fetchCrushonPublicCollectionSnapshot(userId, nsfw = false, locale
     };
 
     const payload = await fetchTrpc('character.queryUserCharacters', input, {
-        proxyChain: [PROXY_TYPES.CORS_EU_ORG, PROXY_TYPES.CORSPROXY_IO, PROXY_TYPES.CORS_LOL, PROXY_TYPES.PUTER],
+        proxyChain: [PROXY_TYPES.CORS_EU_ORG, PROXY_TYPES.CORSPROXY_IO, PROXY_TYPES.CORS_LOL],
         service: 'default',
     });
     const { characters, nextCursor, total } = extractCrushonCollectionPayload(payload);
@@ -428,7 +427,7 @@ export async function getCrushonPublicCreatorSummary(userId, locale = 'en', opti
 
     const profile = await getCrushonUserProfile(userId, {
         includeAuthHeaders: false,
-        proxyChain: [PROXY_TYPES.CORS_EU_ORG, PROXY_TYPES.CORSPROXY_IO, PROXY_TYPES.CORS_LOL, PROXY_TYPES.PUTER],
+        proxyChain: [PROXY_TYPES.CORS_EU_ORG, PROXY_TYPES.CORSPROXY_IO, PROXY_TYPES.CORS_LOL],
         service: 'default',
     }).catch(() => null);
     const sfwResult = await fetchCrushonPublicCollectionSnapshot(userId, false, locale, sharedOptions).catch(() => ({
@@ -859,7 +858,7 @@ async function fetchCrushonProfilePageHtml(userId) {
     if (!userId) return '';
 
     const url = `https://crushon.ai/profile/${encodeURIComponent(userId)}`;
-    const proxies = getCrushonProxyChain([PROXY_TYPES.CORS_EU_ORG, PROXY_TYPES.CORSPROXY_IO, PROXY_TYPES.CORS_LOL, PROXY_TYPES.PUTER]);
+    const proxies = getCrushonProxyChain([PROXY_TYPES.CORS_EU_ORG, PROXY_TYPES.CORSPROXY_IO, PROXY_TYPES.CORS_LOL]);
     let lastError = null;
 
     if (proxies.length === 0) {
@@ -870,7 +869,7 @@ async function fetchCrushonProfilePageHtml(userId) {
         try {
             const response = await proxiedFetch(url, {
                 // Treat creator profile HTML as a public page so CleanBotBrowser does not
-                // accidentally prioritize auth-bearing transports like Puter first.
+                // accidentally prioritize auth-bearing transports first.
                 service: 'default',
                 proxyChain: [proxyType],
                 fetchOptions: {
@@ -1183,7 +1182,7 @@ export async function getCrushonCreatorCharacters(userNeedle, locale = 'en', opt
         count: Math.min(count, 12),
         gender,
         filterTags,
-        proxyChain: [PROXY_TYPES.CORS_EU_ORG, PROXY_TYPES.CORSPROXY_IO, PROXY_TYPES.CORS_LOL, PROXY_TYPES.PUTER],
+        proxyChain: [PROXY_TYPES.CORS_EU_ORG, PROXY_TYPES.CORSPROXY_IO, PROXY_TYPES.CORS_LOL],
         service: 'default',
         allowEmptyCharactersWithTotal: true,
     };

@@ -425,7 +425,7 @@ async function hydrateJannyTrendingCharacters(characters = []) {
 
 /**
  * Fetch trending characters from JannyAI via JanitorAI API
- * Uses Puter.js with browser-like headers to bypass Cloudflare
+ * Uses browser-like headers and the configured CORS proxy chain.
  * @param {Object} options - Fetch options
  * @returns {Promise<Object>} Trending results
  */

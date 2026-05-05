@@ -6,7 +6,7 @@ import { default_avatar, getCharacters, characters, getRequestHeaders, name1 } f
 import { importTags, tag_import_setting } from '/scripts/tags.js';
 import { loadCardChunk } from '../services/cache.js';
 import { fetchQuillgenCard } from '../services/apis/quillgenApi.js';
-import { buildProxyUrl, filterProxyChainBySettings, PROXY_TYPES, proxiedFetch } from '../services/corsProxy.js';
+import { buildProxyUrl, filterProxyChainBySettings, PROXY_TYPES } from '../services/corsProxy.js';
 import { getPygmalionCharacter, transformFullPygmalionCharacter } from '../services/apis/pygmalionApi.js';
 import { getSakuraCharacter, transformFullSakuraCharacter } from '../services/apis/sakuraApi.js';
 import { getSaucepanCompanion, transformFullSaucepanCompanion } from '../services/apis/saucepanApi.js';
@@ -94,12 +94,6 @@ async function fetchImageWithProxyChain(imageUrl) {
             let response;
             if (proxyType === PROXY_TYPES.NONE) {
                 response = await fetch(imageUrl);
-            } else if (proxyType === PROXY_TYPES.PUTER) {
-                response = await proxiedFetch(imageUrl, {
-                    proxyChain: [PROXY_TYPES.PUTER],
-                    fetchOptions: { method: 'GET' },
-                    timeoutMs: 15000,
-                });
             } else {
                 const proxyUrl = buildProxyUrl(proxyType, imageUrl);
                 if (!proxyUrl) continue;

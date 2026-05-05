@@ -1,12 +1,11 @@
 // CORS Proxy Module for CleanBotBrowser
-// Provides modular CORS proxy support with fallbacks and Puter.js integration
+// Provides modular CORS proxy support with fallbacks
 
 /**
  * Available CORS proxy types
  */
 export const PROXY_TYPES = {
     SILLYTAVERN: 'sillytavern',
-    PUTER: 'puter',
     CORSPROXY_IO: 'corsproxy_io',
     CORS_EU_ORG: 'cors_eu_org',
     CORS_LOL: 'cors_lol',
@@ -24,7 +23,6 @@ const PUBLIC_RELAY_PROXY_CHAIN = [
 const PUBLIC_RELAY_PROXY_TYPES = new Set(PUBLIC_RELAY_PROXY_CHAIN);
 const THIRD_PARTY_PROXY_TYPES = new Set([
     ...PUBLIC_RELAY_PROXY_CHAIN,
-    PROXY_TYPES.PUTER,
 ]);
 const SENSITIVE_HEADER_NAMES = new Set([
     'authorization',
@@ -83,7 +81,6 @@ const DEFAULT_CORS_PROXY_SETTINGS = Object.freeze({
     [PROXY_TYPES.CORS_EU_ORG]: true,
     [PROXY_TYPES.CORSPROXY_IO]: true,
     [PROXY_TYPES.CORS_LOL]: true,
-    [PROXY_TYPES.PUTER]: false,
     [PROXY_TYPES.NONE]: true,
 });
 
@@ -163,11 +160,6 @@ const PROXY_CONFIGS = {
         name: 'SillyTavern CORS Proxy',
         buildUrl: (targetUrl) => `/proxy/${encodeURIComponent(targetUrl)}`,
         rateLimit: 'Local SillyTavern server CORS proxy'
-    },
-    [PROXY_TYPES.PUTER]: {
-        name: 'Puter.js Fetch',
-        buildUrl: null, // Puter uses its own fetch method (puter.net.fetch)
-        rateLimit: 'Free, no CORS restrictions'
     },
     [PROXY_TYPES.CORSPROXY_IO]: {
         name: 'corsproxy.io',
@@ -303,10 +295,6 @@ function isDebugEnabled() {
     return typeof window !== 'undefined' && window.__BOT_BROWSER_DEBUG === true;
 }
 
-function isPuterEnabled() {
-    return false;
-}
-
 function debugLog(...args) {
     if (isDebugEnabled()) console.log(...args);
 }
@@ -369,43 +357,6 @@ export function getAuthHeadersForService(service) {
 }
 
 /**
- * Check if Puter.js is available
- * @returns {boolean}
- */
-export function isPuterAvailable() {
-    return typeof window !== 'undefined' &&
-           window.puter &&
-           window.puter.net &&
-           typeof window.puter.net.fetch === 'function';
-}
-
-/**
- * Puter.js support is disabled in this cleaned build.
- * @returns {Promise<boolean>} True if loaded successfully
- */
-export async function loadPuter() {
-    return false;
-}
-
-/**
- * Ensure Puter.js is loaded before use
- * @returns {Promise<boolean>}
- */
-async function ensurePuterLoaded() {
-    return false;
-}
-
-/**
- * Fetch using Puter.js (disabled in this cleaned build)
- * @param {string} url - Target URL
- * @param {RequestInit} options - Fetch options
- * @returns {Promise<Response>}
- */
-async function puterFetch(url, options = {}, timeoutMs = 15000) {
-    throw new Error('Puter.js proxy is disabled in this cleaned build');
-}
-
-/**
  * Build proxied URL for a given proxy type
  * @param {string} proxyType - Proxy type from PROXY_TYPES
  * @param {string} targetUrl - Target URL to proxy
@@ -413,10 +364,6 @@ async function puterFetch(url, options = {}, timeoutMs = 15000) {
  */
 export function buildProxyUrl(proxyType, targetUrl, options = {}) {
     if (!options?.ignoreSettings && !isProxyTypeEnabled(proxyType)) {
-        return null;
-    }
-
-    if (proxyType === PROXY_TYPES.PUTER) {
         return null;
     }
 
@@ -499,12 +446,10 @@ export async function proxiedFetch(url, options = {}) {
         const preferred = [];
         if (hasCookieAuthHeaders) {
             if (proxies.includes(PROXY_TYPES.SILLYTAVERN)) preferred.push(PROXY_TYPES.SILLYTAVERN);
-            if (proxies.includes(PROXY_TYPES.PUTER)) preferred.push(PROXY_TYPES.PUTER);
             if (proxies.includes(PROXY_TYPES.NONE)) preferred.push(PROXY_TYPES.NONE);
         } else {
             if (proxies.includes(PROXY_TYPES.NONE)) preferred.push(PROXY_TYPES.NONE);
             if (proxies.includes(PROXY_TYPES.SILLYTAVERN)) preferred.push(PROXY_TYPES.SILLYTAVERN);
-            if (proxies.includes(PROXY_TYPES.PUTER)) preferred.push(PROXY_TYPES.PUTER);
         }
         const rest = proxies.filter((p) => !preferred.includes(p));
         proxies = [...preferred, ...rest];
@@ -542,16 +487,6 @@ export async function proxiedFetch(url, options = {}) {
                 } finally {
                     cleanup();
                 }
-            } else if (proxyType === PROXY_TYPES.PUTER) {
-                if (!isPuterEnabled()) {
-                    continue;
-                }
-                const loaded = await ensurePuterLoaded();
-                if (!loaded || !isPuterAvailable()) {
-                    continue;
-                }
-                debugLog(`[CORS Proxy] Trying Puter.js fetch for: ${url}`);
-                response = await puterFetch(url, directFetchOptions, timeoutMs);
             } else {
                 const proxyUrl = buildProxyUrl(proxyType, url, {
                     reqHeaders: hasPublicAuthHeaders ? publicAuthHeaderObj : null,
@@ -681,24 +616,12 @@ export async function proxiedFetch(url, options = {}) {
  * @returns {Promise<Response>}
  */
 export async function fetchWithProxy(proxyType, url, fetchOptions = {}) {
-    if (proxyType === PROXY_TYPES.PUTER) {
-        return puterFetch(url, fetchOptions);
-    }
-
     const proxyUrl = buildProxyUrl(proxyType, url);
     if (!proxyUrl) {
         throw new Error(`Invalid proxy type: ${proxyType}`);
     }
 
     return fetch(proxyUrl, fetchOptions);
-}
-
-/**
- * Preload Puter.js in the background
- * Call this early during extension init to have it ready when needed
- */
-export function preloadPuter() {
-    return false;
 }
 
 // Legacy exports for backward compatibility
