@@ -5,7 +5,7 @@ import { importWorldInfo, updateWorldInfoList } from '/scripts/world-info.js';
 // Internal extension modules
 import { loadImportStats, saveImportStats, loadRecentlyViewed, loadPersistentSearch, loadBookmarks, removeBookmark, clearImportedCards, loadFavoriteCreators } from './storage/storage.js';
 import { getTimeAgo } from './storage/stats.js';
-import { loadServiceIndex, initializeServiceCache } from './services/cache.js';
+import { loadServiceIndex, initializeServiceCache, getQueryKey, getWarmQuerySnapshot } from './services/cache.js';
 import { getRandomCard } from './services/cards.js';
 import { importCardToSillyTavern, importCharacterFile } from './services/import.js';
 import { showCardDetail, closeDetailModal, showImageLightbox } from './ui/modals/detail.js';
@@ -118,8 +118,129 @@ const state = {
     recentlyViewed: [],
     searchCollapsed: false,
     cacheInitialized: false,
-    lastActiveTab: 'bots'
+    lastActiveTab: 'bots',
+    queryKey: null,
+    queryMode: null,
+    queryPageSize: null,
+    lastVisitedPage: 1,
+    isRefreshing: false,
+    liveQuerySnapshot: null,
+    pageCacheView: null,
 };
+
+function getDefaultLiveAdvancedFilters(sourceName) {
+    if (sourceName === 'chub' || sourceName === 'chub_lorebooks') {
+        return {
+            minTokens: null,
+            maxTokens: null,
+            customTags: '',
+            excludeTags: '',
+            creatorUsername: '',
+            maxDaysAgo: null,
+            minAiRating: null,
+            requireExamples: false,
+            requireLore: false,
+            requireGreetings: false,
+        };
+    }
+    if (sourceName === 'jannyai') {
+        return { minTokens: null, maxTokens: null, hideLowQuality: false };
+    }
+    if (sourceName === 'character_tavern') {
+        return { minTokens: null, maxTokens: null, tags: [], hasLorebook: false, isOC: false };
+    }
+    if (sourceName === 'wyvern' || sourceName === 'wyvern_lorebooks') {
+        return { rating: 'all', tags: [] };
+    }
+    return null;
+}
+
+function getInitialLiveQueryDescriptor(sourceName) {
+    const autoClear = extension_settings[extensionName].autoClearFilters !== false;
+    const persistedSearch = autoClear ? null : loadPersistentSearch(extensionName, extension_settings, sourceName);
+    const sortBy = persistedSearch?.sortBy || extension_settings[extensionName].defaultSortBy || 'relevance';
+    const hideNsfw = !!extension_settings[extensionName].hideNsfw;
+    const defaults = getDefaultLiveAdvancedFilters(sourceName);
+
+    const advancedFilters = sourceName === 'chub' || sourceName === 'chub_lorebooks'
+        ? (persistedSearch?.advancedFilters || defaults)
+        : null;
+    const jannyAdvancedFilters = sourceName === 'jannyai'
+        ? (persistedSearch?.jannyAdvancedFilters || defaults)
+        : null;
+    const ctAdvancedFilters = sourceName === 'character_tavern'
+        ? (persistedSearch?.ctAdvancedFilters || defaults)
+        : null;
+    const wyvernAdvancedFilters = (sourceName === 'wyvern' || sourceName === 'wyvern_lorebooks')
+        ? (persistedSearch?.wyvernAdvancedFilters || defaults)
+        : null;
+
+    const providerMeta = {
+        jannyai: { mode: 'paged', pageSize: 40 },
+        character_tavern: { mode: 'paged', pageSize: 30 },
+        wyvern: { mode: 'paged', pageSize: 40 },
+        wyvern_lorebooks: { mode: 'paged', pageSize: 20 },
+        risuai_realm: { mode: 'paged', pageSize: 24 },
+        saucepan: { mode: 'paged', pageSize: 24 },
+        botbooru: { mode: 'paged', pageSize: 24 },
+        chub: { mode: 'append', pageSize: 48 },
+        chub_lorebooks: { mode: 'append', pageSize: 48 },
+        anchorhold: { mode: 'append', pageSize: 20 },
+        backyard: { mode: 'append', pageSize: 24 },
+        pygmalion: { mode: 'append', pageSize: 24 },
+        sakura: { mode: 'append', pageSize: 24 },
+        crushon: { mode: 'append', pageSize: 24 },
+        harpy: { mode: 'append', pageSize: 24 },
+    }[sourceName];
+
+    if (!providerMeta) return null;
+
+    const queryState = {
+        provider: sourceName,
+        mode: providerMeta.mode,
+        search: persistedSearch?.filters?.search || '',
+        sort: sortBy,
+        hideNsfw,
+        isLorebooks: sourceName === 'chub_lorebooks' || sourceName === 'wyvern_lorebooks',
+        advancedFilters,
+        jannyAdvancedFilters,
+        ctAdvancedFilters,
+        wyvernAdvancedFilters,
+        pageSize: providerMeta.pageSize,
+    };
+
+    return {
+        sourceName,
+        mode: providerMeta.mode,
+        pageSize: providerMeta.pageSize,
+        queryKey: getQueryKey(sourceName, queryState),
+        queryState,
+    };
+}
+
+function shouldOpenSourceShellImmediately(sourceName) {
+    return new Set([
+        'jannyai',
+        'risuai_realm',
+        'backyard',
+        'pygmalion',
+        'sakura',
+        'saucepan',
+        'botbooru',
+        'crushon',
+        'harpy',
+        'chub',
+        'chub_lorebooks',
+        'character_tavern',
+        'wyvern',
+        'wyvern_lorebooks',
+        'anchorhold',
+        'botify',
+        'joyland',
+        'spicychat',
+        'talkie',
+    ]).has(sourceName);
+}
 
 // Random service options (used for roulette + settings)
 const randomServiceOptions = [
@@ -1252,6 +1373,32 @@ function setupSourceButtons(menu) {
 
             try {
                 let cards = [];
+                const initialLiveQuery = getInitialLiveQueryDescriptor(sourceName);
+                if (initialLiveQuery?.mode === 'paged') {
+                    const warmSnapshot = getWarmQuerySnapshot(initialLiveQuery.queryKey);
+                    if (warmSnapshot?.cards?.length) {
+                        state.queryKey = initialLiveQuery.queryKey;
+                        state.queryMode = initialLiveQuery.mode;
+                        state.queryPageSize = initialLiveQuery.pageSize;
+                        state.lastVisitedPage = warmSnapshot.lastVisitedPage || warmSnapshot.currentPage || 1;
+                        state.liveQuerySnapshot = warmSnapshot;
+                        state.isRefreshing = !!warmSnapshot.isStale;
+                        state.pageCacheView = warmSnapshot.cards;
+                        await createCardBrowser(sourceName, warmSnapshot.cards, state, extensionName, extension_settings, showCardDetailWrapper);
+                        return;
+                    }
+                }
+                const shouldOpenShell = shouldOpenSourceShellImmediately(sourceName);
+                if (shouldOpenShell) {
+                    state.queryKey = initialLiveQuery?.queryKey || null;
+                    state.queryMode = initialLiveQuery?.mode || null;
+                    state.queryPageSize = initialLiveQuery?.pageSize || null;
+                    state.liveQuerySnapshot = null;
+                    state.pageCacheView = null;
+                    state.lastVisitedPage = 1;
+                    state.isRefreshing = true;
+                    await createCardBrowser(sourceName, [], state, extensionName, extension_settings, showCardDetailWrapper);
+                }
 
                 if (sourceName === 'all') {
                     toastr.info('Opening Search All...', '', { timeOut: 1000 });
@@ -1704,8 +1851,10 @@ function setupSourceButtons(menu) {
                     cards = await loadServiceIndex(sourceName, useLive, loadOptions);
                 }
 
+                state.isRefreshing = false;
                 await createCardBrowser(sourceName, cards, state, extensionName, extension_settings, showCardDetailWrapper);
             } catch (error) {
+                state.isRefreshing = false;
                 console.error('[CleanBotBrowser] Error loading source:', error);
                 toastr.error(`Failed to load ${sourceName}`);
             }

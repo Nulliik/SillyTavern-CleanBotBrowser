@@ -3,7 +3,13 @@ import { debounce, escapeHTML } from '../utils/utils.js';
 import { createBrowserHeader, createCardGrid, createCardHTML, createBottomActions, createBulkActionBar } from './templates/templates.js';
 import { getAllTags, getAllCreators, filterCards, sortCards, deduplicateCards, validateCardImages } from '../services/cards.js';
 import { loadPersistentSearch, savePersistentSearch, loadSearchCollapsed, saveSearchCollapsed } from '../storage/storage.js';
-import { loadMoreChubCards, loadMoreChubLorebooks, getChubApiState, getChubLorebooksApiState, resetChubApiState, loadServiceIndex, getCharacterTavernApiState, resetCharacterTavernState, loadMoreCharacterTavernCards, getWyvernApiState, getWyvernLorebooksApiState, resetWyvernApiState, resetWyvernLorebooksApiState, loadMoreWyvernCards, loadMoreWyvernLorebooksWrapper, getAnchorholdApiState, loadMoreAnchorholdCards } from '../services/cache.js';
+import {
+    loadMoreChubCards, loadMoreChubLorebooks, getChubApiState, getChubLorebooksApiState, resetChubApiState, loadServiceIndex,
+    getCharacterTavernApiState, resetCharacterTavernState, loadMoreCharacterTavernCards,
+    getWyvernApiState, getWyvernLorebooksApiState, resetWyvernApiState, resetWyvernLorebooksApiState, loadMoreWyvernCards, loadMoreWyvernLorebooksWrapper,
+    getAnchorholdApiState, loadMoreAnchorholdCards,
+    getQueryKey, getCachedPage, setCachedPage, getWarmQuerySnapshot, revalidateQueryPage, prefetchNextPage, invalidateProviderQueries, markQueryPageVisited
+} from '../services/cache.js';
 import { searchWyvernCharacters, searchWyvernLorebooks, transformWyvernCard, transformWyvernLorebook } from '../services/apis/wyvernApi.js';
 import { searchJannyCharacters, transformJannyCard } from '../services/apis/jannyApi.js';
 import { searchCharacterTavern } from '../services/apis/characterTavernApi.js';
@@ -22,7 +28,7 @@ import { searchBackyardCharacters, transformBackyardCard, backyardApiState, rese
 import { pygmalionApiState, resetPygmalionApiState, loadMorePygmalionCharacters, searchPygmalionCharacters, transformPygmalionCard, PYGMALION_SORT_TYPES } from '../services/apis/pygmalionApi.js';
 import { searchSakuraCharacters, transformSakuraCard, sakuraApiState, resetSakuraState } from '../services/apis/sakuraApi.js';
 import { searchSaucepanCompanions, transformSaucepanCard, saucepanApiState, resetSaucepanState } from '../services/apis/saucepanApi.js';
-import { searchBotbooruPosts, transformBotbooruCard, botbooruApiState, resetBotbooruState } from '../services/apis/botbooruApi.js';
+import { searchBotbooruPosts, transformBotbooruCard, botbooruApiState, resetBotbooruState, BOTBOORU_SORT_OPTIONS } from '../services/apis/botbooruApi.js';
 import { browseCrushonCharacters, searchCrushonCharacters, transformCrushonCard, crushonApiState, resetCrushonState } from '../services/apis/crushonApi.js';
 import { searchHarpyCharacters, transformHarpyCard, harpyApiState, resetHarpyState } from '../services/apis/harpyApi.js';
 import { searchBotify, transformBotifyCard, botifyApiState, resetBotifyState, BOTIFY_SORT_OPTIONS } from '../services/apis/botifyApi.js';
@@ -40,6 +46,11 @@ let jannyApiState = {
 };
 
 const ANCHORHOLD_BROWSER_PAGE_SIZE = 20;
+const DEFAULT_LIVE_PAGE_SIZE = 24;
+const LIVE_QUERY_MODES = {
+    paged: 'paged',
+    append: 'append',
+};
 
 export function resetJannyApiState() {
     jannyApiState = {
@@ -55,11 +66,446 @@ export function getJannyApiState() {
     return jannyApiState;
 }
 
+function isServerPagedProvider(state) {
+    return !!(state.isJannyAI || state.isCharacterTavern || state.isWyvern || state.isRisuRealm || state.isSaucepan || state.isBotbooru
+        || state.isJannyAITrending || state.isChubTrending || state.isWyvernTrending || state.isRisuRealmTrending);
+}
+
+function getLiveProviderId(state) {
+    if (state.isJannyAITrending) return 'jannyai_trending';
+    if (state.isChubTrending) return 'chub_trending';
+    if (state.isWyvernTrending) return 'wyvern_trending';
+    if (state.isRisuRealmTrending) return 'risuai_realm_trending';
+    if (state.isLiveChub) return state.isLorebooks ? 'chub_lorebooks' : 'chub';
+    if (state.isJannyAI) return 'jannyai';
+    if (state.isCharacterTavern) return 'character_tavern';
+    if (state.isWyvern) return state.isWyvernLorebooks ? 'wyvern_lorebooks' : 'wyvern';
+    if (state.isAnchorhold) return 'anchorhold';
+    if (state.isRisuRealm) return 'risuai_realm';
+    if (state.isBackyard) return 'backyard';
+    if (state.isPygmalion) return 'pygmalion';
+    if (state.isSakura) return 'sakura';
+    if (state.isSaucepan) return 'saucepan';
+    if (state.isBotbooru) return 'botbooru';
+    if (state.isCrushon) return 'crushon';
+    if (state.isHarpy) return 'harpy';
+    return state.currentService || '';
+}
+
+function getLiveQueryMode(state) {
+    if (isServerPagedProvider(state)) return LIVE_QUERY_MODES.paged;
+    if (state.isLiveChub || state.isAnchorhold || state.isBackyard || state.isPygmalion || state.isSakura || state.isCrushon || state.isHarpy) {
+        return LIVE_QUERY_MODES.append;
+    }
+    return null;
+}
+
+function getLiveQueryPageSize(state) {
+    if (state.isJannyAI || state.isJannyAITrending) return 40;
+    if (state.isCharacterTavern) return 30;
+    if (state.isWyvern) return state.isWyvernLorebooks ? 20 : 40;
+    if (state.isRisuRealm || state.isRisuRealmTrending) return 24;
+    if (state.isSaucepan || state.isBotbooru || state.isSakura) return 24;
+    if (state.isLiveChub) return 48;
+    if (state.isAnchorhold) return ANCHORHOLD_BROWSER_PAGE_SIZE;
+    if (state.isBackyard || state.isCrushon || state.isHarpy) return 24;
+    if (state.isPygmalion || state.isWyvernTrending || state.isChubTrending) return 40;
+    return DEFAULT_LIVE_PAGE_SIZE;
+}
+
+function buildLiveQueryState(state, extensionName, extension_settings) {
+    const hideNsfw = !!extension_settings[extensionName].hideNsfw;
+    return {
+        provider: getLiveProviderId(state),
+        mode: getLiveQueryMode(state),
+        search: state.filters?.search || '',
+        sort: state.sortBy || 'relevance',
+        hideNsfw,
+        isLorebooks: !!state.isLorebooks,
+        advancedFilters: state.advancedFilters || null,
+        jannyAdvancedFilters: state.jannyAdvancedFilters || null,
+        ctAdvancedFilters: state.ctAdvancedFilters || null,
+        wyvernAdvancedFilters: state.wyvernAdvancedFilters || null,
+        pageSize: getLiveQueryPageSize(state),
+    };
+}
+
+function syncProviderPaginationStateFromMeta(state, page, meta = {}) {
+    if (state.isJannyAI) {
+        jannyApiState.page = page;
+        if (typeof meta.hasMore === 'boolean') jannyApiState.hasMore = meta.hasMore;
+    } else if (state.isCharacterTavern) {
+        const ctApiState = getCharacterTavernApiState();
+        ctApiState.page = page;
+        if (typeof meta.hasMore === 'boolean') ctApiState.hasMore = meta.hasMore;
+        if (meta.totalPages) ctApiState.totalPages = meta.totalPages;
+        if (meta.total) ctApiState.totalHits = meta.total;
+    } else if (state.isWyvern) {
+        const apiState = state.isWyvernLorebooks ? getWyvernLorebooksApiState() : getWyvernApiState();
+        apiState.page = page;
+        if (typeof meta.hasMore === 'boolean') apiState.hasMore = meta.hasMore;
+        if (meta.total) apiState.totalHits = meta.total;
+    } else if (state.isRisuRealm || state.isRisuRealmTrending) {
+        risuRealmApiState.page = page;
+        if (typeof meta.hasMore === 'boolean') risuRealmApiState.hasMore = meta.hasMore;
+        if (meta.totalPages) risuRealmApiState.totalPages = meta.totalPages;
+    } else if (state.isSaucepan) {
+        saucepanApiState.page = page;
+        if (typeof meta.hasMore === 'boolean') saucepanApiState.hasMore = meta.hasMore;
+        if (meta.total != null) saucepanApiState.total = meta.total;
+    } else if (state.isBotbooru) {
+        botbooruApiState.page = page;
+        if (typeof meta.hasMore === 'boolean') botbooruApiState.hasMore = meta.hasMore;
+        if (meta.total != null) botbooruApiState.total = meta.total;
+    } else if (state.isJannyAITrending) {
+        jannyTrendingState.page = page;
+        if (typeof meta.hasMore === 'boolean') jannyTrendingState.hasMore = meta.hasMore;
+    } else if (state.isChubTrending) {
+        chubTrendingState.page = page;
+        if (typeof meta.hasMore === 'boolean') chubTrendingState.hasMore = meta.hasMore;
+    } else if (state.isWyvernTrending) {
+        wyvernTrendingState.page = page;
+        if (typeof meta.hasMore === 'boolean') wyvernTrendingState.hasMore = meta.hasMore;
+    }
+}
+
+function getCurrentProviderPaginationMeta(state) {
+    if (state.isJannyAI) {
+        return { hasMore: jannyApiState.hasMore };
+    }
+    if (state.isCharacterTavern) {
+        const ctApiState = getCharacterTavernApiState();
+        return { hasMore: ctApiState.hasMore, total: ctApiState.totalHits, totalPages: ctApiState.totalPages };
+    }
+    if (state.isWyvern) {
+        const apiState = state.isWyvernLorebooks ? getWyvernLorebooksApiState() : getWyvernApiState();
+        return { hasMore: apiState.hasMore, total: apiState.totalHits };
+    }
+    if (state.isRisuRealm || state.isRisuRealmTrending) {
+        return { hasMore: risuRealmApiState.hasMore, totalPages: risuRealmApiState.totalPages };
+    }
+    if (state.isSaucepan) {
+        return { hasMore: saucepanApiState.hasMore, total: saucepanApiState.total };
+    }
+    if (state.isBotbooru) {
+        return { hasMore: botbooruApiState.hasMore, total: botbooruApiState.total };
+    }
+    if (state.isJannyAITrending) return { hasMore: jannyTrendingState.hasMore };
+    if (state.isChubTrending) return { hasMore: chubTrendingState.hasMore };
+    if (state.isWyvernTrending) return { hasMore: wyvernTrendingState.hasMore };
+    if (state.isLiveChub) {
+        const apiState = state.isLorebooks ? getChubLorebooksApiState() : getChubApiState();
+        return { hasMore: apiState.hasMore };
+    }
+    if (state.isAnchorhold) {
+        const apiState = getAnchorholdApiState();
+        return { hasMore: apiState.hasMore };
+    }
+    return {};
+}
+
+function getLiveQueryContext(state, extensionName, extension_settings) {
+    const provider = getLiveProviderId(state);
+    const mode = getLiveQueryMode(state);
+    if (!provider || !mode) return null;
+    const queryState = buildLiveQueryState(state, extensionName, extension_settings);
+    return {
+        provider,
+        mode,
+        pageSize: getLiveQueryPageSize(state),
+        prefetchNext: mode === LIVE_QUERY_MODES.paged || state.isLiveChub || state.isAnchorhold,
+        queryState,
+        queryKey: getQueryKey(provider, queryState),
+    };
+}
+
+function applyPagedCardsToState(state, cards, page, meta, extensionName, extension_settings, options = {}) {
+    const normalizedCards = Array.isArray(cards) ? cards : [];
+    state.pageCacheView = normalizedCards;
+    state.currentCards = normalizedCards;
+    state.fuse = null;
+    state.filteredCards = sortCards(applyClientSideFilters(normalizedCards, state, extensionName, extension_settings), state.sortBy);
+    state.currentPage = page;
+    state.totalPages = 1;
+    state.lastVisitedPage = page;
+    state.isRefreshing = !!options.isRefreshing;
+    syncProviderPaginationStateFromMeta(state, page, meta);
+}
+
+async function fetchServerPagedProviderPage(state, pageNum, extensionName, extension_settings) {
+    if (state.isJannyAI) {
+        let jannySort = 'createdAtStamp:desc';
+        switch (state.sortBy) {
+            case 'date_desc': jannySort = 'createdAtStamp:desc'; break;
+            case 'date_asc': jannySort = 'createdAtStamp:asc'; break;
+            case 'tokens_desc': jannySort = 'totalToken:desc'; break;
+            case 'tokens_asc': jannySort = 'totalToken:asc'; break;
+            default: jannySort = 'createdAtStamp:desc';
+        }
+
+        const searchResults = await searchJannyCharacters({
+            search: state.filters.search,
+            page: pageNum,
+            limit: 40,
+            sort: jannySort,
+            minTokens: state.jannyAdvancedFilters?.minTokens || 29,
+            maxTokens: state.jannyAdvancedFilters?.maxTokens || 4101,
+            excludeLowQuality: !!state.jannyAdvancedFilters?.hideLowQuality,
+        });
+
+        const results = searchResults.results?.[0] || {};
+        const cards = (results.hits || []).map(hit => transformJannyCard(hit));
+        jannyApiState.lastSearch = state.filters.search;
+        jannyApiState.lastSort = jannySort;
+        return {
+            cards,
+            hasMore: (results.totalHits || 0) > (pageNum * 40),
+            total: results.totalHits || 0,
+        };
+    }
+
+    if (state.isCharacterTavern) {
+        const cards = await searchCharacterTavern({
+            query: state.filters.search,
+            page: pageNum,
+            limit: 30,
+            hasLorebook: state.ctAdvancedFilters?.hasLorebook || undefined,
+            isOC: state.ctAdvancedFilters?.isOC || undefined,
+            minTokens: state.ctAdvancedFilters?.minTokens || undefined,
+            maxTokens: state.ctAdvancedFilters?.maxTokens || undefined,
+            tags: state.ctAdvancedFilters?.tags || []
+        });
+        const apiState = getCharacterTavernApiState();
+        return {
+            cards,
+            hasMore: apiState.hasMore,
+            total: apiState.totalHits,
+            totalPages: apiState.totalPages,
+        };
+    }
+
+    if (state.isWyvern) {
+        let wyvernSort = 'votes';
+        let wyvernOrder = 'DESC';
+        switch (state.sortBy) {
+            case 'date_desc': wyvernSort = 'created_at'; wyvernOrder = 'DESC'; break;
+            case 'date_asc': wyvernSort = 'created_at'; wyvernOrder = 'ASC'; break;
+            case 'name_asc': wyvernSort = 'name'; wyvernOrder = 'ASC'; break;
+            case 'name_desc': wyvernSort = 'name'; wyvernOrder = 'DESC'; break;
+            default: wyvernSort = 'votes'; wyvernOrder = 'DESC';
+        }
+
+        const searchFunc = state.isWyvernLorebooks ? searchWyvernLorebooks : searchWyvernCharacters;
+        const transformFunc = state.isWyvernLorebooks ? transformWyvernLorebook : transformWyvernCard;
+        const result = await searchFunc({
+            search: state.filters.search,
+            page: pageNum,
+            limit: state.isWyvernLorebooks ? 20 : 40,
+            sort: wyvernSort,
+            order: wyvernOrder,
+            tags: state.wyvernAdvancedFilters?.tags || [],
+            rating: state.wyvernAdvancedFilters?.rating !== 'all' ? state.wyvernAdvancedFilters?.rating : undefined,
+            hideNsfw: !state.wyvernAdvancedFilters?.rating ? extension_settings[extensionName].hideNsfw : false
+        });
+
+        const cards = (result.results || []).map(transformFunc);
+        return {
+            cards,
+            hasMore: result.hasMore,
+            total: result.total,
+            totalPages: result.totalPages,
+        };
+    }
+
+    if (state.isRisuRealm || state.isRisuRealmTrending) {
+        if (state.isRisuRealmTrending) {
+            const result = await fetchRisuRealmTrending({
+                page: pageNum,
+                nsfw: !extension_settings[extensionName].hideNsfw
+            });
+            return {
+                cards: (result.cards || []).map(card => ({
+                    ...transformRisuRealmCard(card),
+                    sourceService: 'risuai_realm_trending',
+                    isTrending: true,
+                })),
+                hasMore: result.hasMore,
+                totalPages: result.totalPages,
+            };
+        }
+
+        let risuSort = 'recommended';
+        if (state.sortBy === 'date_desc' || state.sortBy === 'date_asc') risuSort = 'date';
+        else if (state.sortBy === 'relevance') risuSort = 'download';
+        const result = await searchRisuRealm({
+            search: state.filters.search,
+            page: pageNum,
+            sort: risuSort,
+            nsfw: !extension_settings[extensionName].hideNsfw
+        });
+        return {
+            cards: (result.cards || []).map(card => ({
+                ...transformRisuRealmCard(card),
+                sourceService: 'risuai_realm',
+                isLiveApi: true,
+            })),
+            hasMore: result.hasMore,
+            totalPages: result.totalPages,
+        };
+    }
+
+    if (state.isSaucepan) {
+        const limit = saucepanApiState.limit || 24;
+        const targetOffset = (pageNum - 1) * limit;
+        const sort = state.sortBy === 'date_desc' ? 'created' : 'popularity';
+        const result = await searchSaucepanCompanions({
+            search: state.filters.search,
+            sort,
+            offset: targetOffset,
+            limit,
+            nsfw: !extension_settings[extensionName].hideNsfw
+        });
+        return {
+            cards: (result.characters || []).map(transformSaucepanCard),
+            hasMore: result.hasMore,
+            total: result.total,
+        };
+    }
+
+    if (state.isBotbooru) {
+        const limit = botbooruApiState.limit || 24;
+        const targetOffset = (pageNum - 1) * limit;
+        const sort = state.sortBy === 'date_desc'
+            ? BOTBOORU_SORT_OPTIONS.LATEST
+            : BOTBOORU_SORT_OPTIONS.DOWNLOADS;
+        const result = await searchBotbooruPosts({
+            search: state.filters.search,
+            sort,
+            offset: targetOffset,
+            limit,
+            sfwOnly: extension_settings[extensionName].hideNsfw !== false
+        });
+        return {
+            cards: (result.posts || []).map(transformBotbooruCard),
+            hasMore: result.hasMore,
+            total: result.total,
+        };
+    }
+
+    if (state.isJannyAITrending) {
+        const result = await fetchJannyTrending({ page: pageNum, limit: 40 });
+        return {
+            cards: (result.characters || []).map(transformJannyTrendingCard),
+            hasMore: result.hasMore,
+        };
+    }
+
+    if (state.isChubTrending) {
+        const result = await fetchChubTrending({
+            page: pageNum,
+            limit: 48,
+            nsfw: !extension_settings[extensionName].hideNsfw
+        });
+        return {
+            cards: (result.nodes || []).map(transformChubTrendingCard),
+            hasMore: result.hasMore,
+        };
+    }
+
+    if (state.isWyvernTrending) {
+        const result = await fetchWyvernTrending({
+            page: pageNum,
+            limit: 40,
+            sort: 'nsfw-popular',
+            rating: extension_settings[extensionName].hideNsfw ? 'none' : 'all'
+        });
+        return {
+            cards: (result.results || []).map(transformWyvernTrendingCard),
+            hasMore: result.hasMore,
+        };
+    }
+
+    throw new Error(`Unsupported paged provider: ${getLiveProviderId(state)}`);
+}
+
 // Helper to update cached tags/creators and refresh filter dropdowns after loading new cards
 function updateCachedFiltersAndDropdowns(state, menuContent) {
     state.cachedTags = getAllTags(state.currentCards);
     state.cachedCreators = getAllCreators(state.currentCards);
     updateFilterDropdowns(menuContent, state.cachedTags, state.cachedCreators, state);
+}
+
+function scheduleDeferredFilterRefresh(state, menuContent) {
+    if (!menuContent) return;
+    const run = () => updateCachedFiltersAndDropdowns(state, menuContent);
+    if (window.requestIdleCallback) {
+        requestIdleCallback(run);
+    } else {
+        setTimeout(run, 50);
+    }
+}
+
+async function loadPagedProviderPageIntoBrowser({ state, pageNum, menuContent, showCardDetailFunc, extensionName, extension_settings, forceRefresh = false, background = false, skipRender = false }) {
+    const context = getLiveQueryContext(state, extensionName, extension_settings);
+    if (!context || context.mode !== LIVE_QUERY_MODES.paged) {
+        throw new Error('Paged provider context is required');
+    }
+
+    state.queryKey = context.queryKey;
+    state.queryMode = context.mode;
+    state.queryPageSize = context.pageSize;
+    state.liveQuerySnapshot = getWarmQuerySnapshot(context.queryKey, { page: pageNum });
+
+    const cached = !forceRefresh ? getCachedPage(context.queryKey, pageNum) : null;
+    if (cached) {
+        applyPagedCardsToState(state, cached.cards, pageNum, cached.meta, extensionName, extension_settings, {
+            isRefreshing: background || cached.isStale,
+        });
+        markQueryPageVisited(context.queryKey, pageNum);
+        if (!skipRender && menuContent) {
+            scheduleDeferredFilterRefresh(state, menuContent);
+            renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
+            refreshLiveResultsCount(menuContent, state, extensionName, extension_settings);
+        }
+        if (!background && cached.meta?.hasMore && context.prefetchNext) {
+            prefetchNextPage(context.queryKey, pageNum, () => fetchServerPagedProviderPage(state, pageNum + 1, extensionName, extension_settings), context);
+        }
+        if (!cached.isStale && !forceRefresh) {
+            return { cards: cached.cards, meta: cached.meta, fromCache: true };
+        }
+    }
+
+    const result = await revalidateQueryPage(
+        context.queryKey,
+        pageNum,
+        () => fetchServerPagedProviderPage(state, pageNum, extensionName, extension_settings),
+        {
+            provider: context.provider,
+            mode: context.mode,
+            pageSize: context.pageSize,
+            prefetchNext: context.prefetchNext,
+            queryState: context.queryState,
+            force: forceRefresh,
+        },
+    );
+
+    applyPagedCardsToState(state, result.cards, pageNum, result.meta, extensionName, extension_settings, {
+        isRefreshing: false,
+    });
+    markQueryPageVisited(context.queryKey, pageNum);
+    state.liveQuerySnapshot = getWarmQuerySnapshot(context.queryKey, { page: pageNum });
+
+    if (!skipRender && menuContent) {
+        scheduleDeferredFilterRefresh(state, menuContent);
+        renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
+        refreshLiveResultsCount(menuContent, state, extensionName, extension_settings);
+    }
+
+    if (result.meta?.hasMore && context.prefetchNext) {
+        prefetchNextPage(context.queryKey, pageNum, () => fetchServerPagedProviderPage(state, pageNum + 1, extensionName, extension_settings), context);
+    }
+
+    return result;
 }
 
 /**
@@ -101,6 +547,25 @@ async function loadCardsUntilTarget({ state, extensionName, extension_settings, 
                 // Update cached tags/creators
                 state.cachedTags = getAllTags(state.currentCards);
                 state.cachedCreators = getAllCreators(state.currentCards);
+
+                if (state.queryMode === LIVE_QUERY_MODES.append && state.queryKey) {
+                    const approximatePage = Math.max(1, Math.ceil(state.currentCards.length / Math.max(1, getLiveQueryPageSize(state))));
+                    setCachedPage(state.queryKey, approximatePage, {
+                        provider: getLiveProviderId(state),
+                        mode: state.queryMode,
+                        pageSize: state.queryPageSize || getLiveQueryPageSize(state),
+                        prefetchNext: true,
+                        queryState: buildLiveQueryState(state, extensionName, extension_settings),
+                        cards: newCards,
+                        mergedCards: state.currentCards,
+                        meta: {
+                            ...getCurrentProviderPaginationMeta(state),
+                            fetchedAt: Date.now(),
+                        },
+                        lastVisitedPage: state.currentPage || 1,
+                    });
+                    state.liveQuerySnapshot = getWarmQuerySnapshot(state.queryKey, { page: state.currentPage || 1 });
+                }
             } else {
                 break;
             }
@@ -112,6 +577,22 @@ async function loadCardsUntilTarget({ state, extensionName, extension_settings, 
     }
 
     return { loaded: totalLoaded, error: lastError };
+}
+
+function prefetchAppendBuffer({ state, extensionName, extension_settings, targetCount, loadMoreFunc, apiState }) {
+    if (!state || !apiState || apiState.isLoading || !apiState.hasMore) return;
+    setTimeout(() => {
+        if (apiState.isLoading || !apiState.hasMore || state.filteredCards.length >= targetCount) return;
+        loadCardsUntilTarget({
+            state,
+            extensionName,
+            extension_settings,
+            targetCount,
+            loadMoreFunc,
+            apiState,
+            maxAttempts: 2,
+        }).catch(error => console.warn('[CleanBotBrowser] Append prefetch failed:', error));
+    }, 10);
 }
 
 // Helper to apply all client-side filters consistently (blocklist, NSFW, image validation)
@@ -145,6 +626,61 @@ function updateResultsCount(menuContent, text) {
     const countContainer = menuContent?.querySelector('.bot-browser-results-count');
     if (countContainer) {
         countContainer.textContent = text;
+    }
+}
+
+function refreshLiveResultsCount(menuContent, state, extensionName, extension_settings) {
+    if (!menuContent) return;
+    const hideNsfw = extension_settings[extensionName].hideNsfw || false;
+    const nsfwText = hideNsfw ? ' (after hiding NSFW)' : '';
+    const refreshingText = state.isRefreshing ? ' • refreshing…' : '';
+    const loadingText = state.isRefreshing && (!Array.isArray(state.currentCards) || state.currentCards.length === 0) ? ' • loading…' : refreshingText;
+
+    let text = '';
+    if (state.isJannyAI) {
+        text = `Browsing JannyAI${nsfwText}${loadingText}`;
+    } else if (state.isCharacterTavern) {
+        text = `Browsing Character Tavern${nsfwText}${loadingText}`;
+    } else if (state.isWyvern) {
+        text = `Browsing Wyvern Chat${nsfwText}${loadingText}`;
+    } else if (state.isRisuRealm) {
+        text = `Browsing RisuRealm${nsfwText}${loadingText}`;
+    } else if (state.isSaucepan) {
+        const totalPages = saucepanApiState.total ? Math.ceil(saucepanApiState.total / (saucepanApiState.limit || 24)) : null;
+        text = totalPages
+            ? `Browsing Saucepan.ai - page ${saucepanApiState.page || 1} of ${totalPages} (${Number(saucepanApiState.total).toLocaleString()} total)${nsfwText}${loadingText}`
+            : `Browsing Saucepan.ai - page ${saucepanApiState.page || 1}${nsfwText}${loadingText}`;
+    } else if (state.isBotbooru) {
+        const totalPages = botbooruApiState.total ? Math.ceil(botbooruApiState.total / (botbooruApiState.limit || 24)) : null;
+        text = totalPages
+            ? `Browsing BotBooru - page ${botbooruApiState.page || 1} of ${totalPages} (${Number(botbooruApiState.total).toLocaleString()} total)${nsfwText}${loadingText}`
+            : `Browsing BotBooru - page ${botbooruApiState.page || 1}${nsfwText}${loadingText}`;
+    } else if (state.isJannyAITrending) {
+        text = `Browsing JannyAI Trending${loadingText}`;
+    } else if (state.isChubTrending) {
+        text = `Browsing Chub Trending${loadingText}`;
+    } else if (state.isWyvernTrending) {
+        text = `Browsing Wyvern Trending${loadingText}`;
+    } else if (state.isRisuRealmTrending) {
+        text = `Browsing RisuRealm Trending${loadingText}`;
+    } else if (state.isLiveChub) {
+        text = `Browsing Chub API${nsfwText}${loadingText}`;
+    } else if (state.isAnchorhold) {
+        text = `Browsing 4chan - /aicg/${nsfwText}${loadingText}`;
+    } else if (state.isBackyard) {
+        text = `Browsing Backyard.ai${nsfwText}${loadingText}`;
+    } else if (state.isPygmalion) {
+        text = `Browsing Pygmalion${nsfwText}${loadingText}`;
+    } else if (state.isSakura) {
+        text = `Browsing Sakura.fm${nsfwText}${loadingText}`;
+    } else if (state.isCrushon) {
+        text = `Browsing CrushOn.AI${nsfwText}${loadingText}`;
+    } else if (state.isHarpy) {
+        text = `Browsing Harpy.chat${loadingText}`;
+    }
+
+    if (text) {
+        updateResultsCount(menuContent, text);
     }
 }
 
@@ -338,6 +874,9 @@ function mergeHydratedAllSourceCards({ state, menuContent, cards, sourceLabel, s
 
     const added = Math.max(0, state.currentCards.length - beforeCount);
     if (added > 0) {
+        const wrapper = menuContent?.querySelector('.bot-browser-card-grid-wrapper');
+        state.preserveGridScrollOnRender = true;
+        state.preservedGridScrollTop = wrapper ? wrapper.scrollTop : 0;
         updateCachedFiltersAndDropdowns(state, menuContent);
         renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
         const hydrated = state.allSourcesHydratedSources || 0;
@@ -497,10 +1036,11 @@ function startAllSourcesBackgroundHydration(state, menuContent, showCardDetailFu
 export async function createCardBrowser(serviceName, cards, state, extensionName, extension_settings, showCardDetailFunc) {
     state.view = 'browser';
     state.currentService = serviceName;
+    const isShellOpen = state.isRefreshing === true && Array.isArray(cards) && cards.length === 0;
 
     // Detect if this is a live Chub API source (cards/lorebooks have isLiveChub flag)
     const isChubService = serviceName === 'chub' || serviceName === 'chub_lorebooks';
-    state.isLiveChub = isChubService && cards.some(c => c.isLiveChub);
+    state.isLiveChub = isChubService && (isShellOpen || cards.some(c => c.isLiveChub));
     state.isLorebooks = serviceName === 'chub_lorebooks';
 
     // Detect if this is JannyAI (always live API) - includes trending
@@ -553,14 +1093,14 @@ export async function createCardBrowser(serviceName, cards, state, extensionName
     state.isAnchorhold = serviceName === 'anchorhold' || cards.some(c => c.sourceService === 'anchorhold_live');
 
     // Detect if this is Character Tavern.
-    state.isCharacterTavern = serviceName === 'character_tavern' && cards.some(c => c.isCharacterTavern || c.sourceService === 'character_tavern_live');
+    state.isCharacterTavern = serviceName === 'character_tavern' && (isShellOpen || cards.some(c => c.isCharacterTavern || c.sourceService === 'character_tavern_live'));
     if (state.isCharacterTavern) {
         resetCharacterTavernState();
     }
 
     // Detect if this is Wyvern.
     const isWyvernService = serviceName === 'wyvern' || serviceName === 'wyvern_lorebooks';
-    state.isWyvern = isWyvernService && cards.some(c => c.isWyvern || c.sourceService === 'wyvern_live' || c.sourceService === 'wyvern_lorebooks_live');
+    state.isWyvern = isWyvernService && (isShellOpen || cards.some(c => c.isWyvern || c.sourceService === 'wyvern_live' || c.sourceService === 'wyvern_lorebooks_live'));
     state.isWyvernLorebooks = serviceName === 'wyvern_lorebooks';
     if (state.isWyvern) {
         if (state.isWyvernLorebooks) {
@@ -589,6 +1129,7 @@ export async function createCardBrowser(serviceName, cards, state, extensionName
         sourceService: card.sourceService || serviceName
     }));
     state.currentCards = deduplicateCards(cardsWithSource);
+    state.pageCacheView = null;
     state.allSourcesBaseCards = serviceName === 'all' ? state.currentCards : null;
 
     // Load persistent search for this service ONLY if autoClearFilters is disabled
@@ -688,6 +1229,19 @@ export async function createCardBrowser(serviceName, cards, state, extensionName
     // Initialize multi-select state
     state.isMultiSelectMode = false;
     state.selectedCards = new Set();
+    const liveQueryContext = getLiveQueryContext(state, extensionName, extension_settings);
+    state.queryKey = liveQueryContext?.queryKey || null;
+    state.queryMode = liveQueryContext?.mode || null;
+    state.queryPageSize = liveQueryContext?.pageSize || null;
+    if (!liveQueryContext) {
+        state.isRefreshing = false;
+    }
+    if (!state.queryKey) {
+        state.liveQuerySnapshot = null;
+    }
+    if (!state.liveQuerySnapshot && state.queryKey) {
+        state.liveQuerySnapshot = getWarmQuerySnapshot(state.queryKey);
+    }
 
     const menu = document.getElementById('bot-browser-menu');
     if (!menu) return;
@@ -711,13 +1265,61 @@ export async function createCardBrowser(serviceName, cards, state, extensionName
 
     // Store filtered cards for pagination
     state.filteredCards = cardsWithImages;
-    state.currentPage = 1;
+    state.currentPage = state.liveQuerySnapshot?.queryKey === state.queryKey
+        ? Number(state.liveQuerySnapshot?.lastVisitedPage || state.liveQuerySnapshot?.currentPage || 1) || 1
+        : 1;
     const cardsPerPage = getBrowserCardsPerPage(state, extensionName, extension_settings);
     state.totalPages = Math.max(1, Math.ceil(cardsWithImages.length / cardsPerPage));
+    const isInstantShell = state.isRefreshing && state.currentCards.length === 0;
+
+    if (state.queryMode === LIVE_QUERY_MODES.paged) {
+        const warmPage = state.liveQuerySnapshot?.queryKey === state.queryKey
+            ? Number(state.liveQuerySnapshot?.currentPage || state.liveQuerySnapshot?.lastVisitedPage || 1) || 1
+            : 1;
+        const cachedWarmPage = state.queryKey ? getCachedPage(state.queryKey, warmPage) : null;
+        state.pageCacheView = state.filteredCards;
+        state.currentPage = warmPage;
+        state.lastVisitedPage = warmPage;
+        if (cachedWarmPage) {
+            syncProviderPaginationStateFromMeta(state, warmPage, cachedWarmPage.meta);
+            state.isRefreshing = cachedWarmPage.isStale;
+        }
+        markQueryPageVisited(state.queryKey, warmPage);
+        setCachedPage(state.queryKey, warmPage, {
+            provider: liveQueryContext?.provider,
+            mode: state.queryMode,
+            pageSize: state.queryPageSize,
+            prefetchNext: liveQueryContext?.prefetchNext,
+            queryState: liveQueryContext?.queryState,
+            cards: state.currentCards,
+            meta: {
+                ...getCurrentProviderPaginationMeta(state),
+                fetchedAt: cachedWarmPage?.meta?.fetchedAt || Date.now(),
+            },
+            lastVisitedPage: warmPage,
+        });
+        state.liveQuerySnapshot = getWarmQuerySnapshot(state.queryKey, { page: warmPage });
+    } else if (state.queryMode === LIVE_QUERY_MODES.append && state.queryKey) {
+        setCachedPage(state.queryKey, 1, {
+            provider: liveQueryContext?.provider,
+            mode: state.queryMode,
+            pageSize: state.queryPageSize,
+            prefetchNext: liveQueryContext?.prefetchNext,
+            queryState: liveQueryContext?.queryState,
+            cards: state.currentCards,
+            mergedCards: state.currentCards,
+            meta: {
+                ...getCurrentProviderPaginationMeta(state),
+                fetchedAt: Date.now(),
+            },
+            lastVisitedPage: 1,
+        });
+        state.liveQuerySnapshot = getWarmQuerySnapshot(state.queryKey, { page: 1 });
+    }
 
     // For live Chub API: if initial filtered cards are less than cardsPerPage, load more pages
     // This fixes the issue where filtering removes most cards leaving only 1-5 visible initially
-    if (state.isLiveChub && state.filteredCards.length < cardsPerPage) {
+    if (!isInstantShell && state.isLiveChub && state.filteredCards.length < cardsPerPage) {
         const apiState = state.isLorebooks ? getChubLorebooksApiState() : getChubApiState();
         const loadMoreFunc = state.isLorebooks ? loadMoreChubLorebooks : loadMoreChubCards;
 
@@ -733,7 +1335,7 @@ export async function createCardBrowser(serviceName, cards, state, extensionName
         state.totalPages = Math.max(1, Math.ceil(state.filteredCards.length / cardsPerPage));
     }
 
-    if (state.isAnchorhold && state.filteredCards.length < cardsPerPage) {
+    if (!isInstantShell && state.isAnchorhold && state.filteredCards.length < cardsPerPage) {
         const apiState = getAnchorholdApiState();
         await loadCardsUntilTarget({
             state,
@@ -763,21 +1365,23 @@ export async function createCardBrowser(serviceName, cards, state, extensionName
     const menuContent = menu.querySelector('.bot-browser-content');
     const hideNsfw = extension_settings[extensionName].hideNsfw || false;
     const nsfwText = hideNsfw ? ' (after hiding NSFW)' : '';
+    const refreshingText = state.isRefreshing ? ' • refreshing…' : '';
+    const liveLoadingText = state.isRefreshing && state.currentCards.length === 0 ? ' • loading…' : refreshingText;
     // For live APIs (Chub/JannyAI/CT/Wyvern), show "Browsing X API" instead of count (we don't know total)
     const cardCountText = state.isLiveChub
-        ? `Browsing Chub API${nsfwText}`
+        ? `Browsing Chub API${nsfwText}${liveLoadingText}`
         : state.isJannyAI
-            ? `Browsing JannyAI${nsfwText}`
+            ? `Browsing JannyAI${nsfwText}${liveLoadingText}`
             : state.isRisuRealm
-                ? `Browsing RisuRealm${nsfwText}`
+                ? `Browsing RisuRealm${nsfwText}${liveLoadingText}`
                 : state.isCharacterTavern
-                    ? `Browsing Character Tavern${nsfwText}`
+                    ? `Browsing Character Tavern${nsfwText}${liveLoadingText}`
                         : state.isWyvern
-                            ? `Browsing Wyvern Chat${nsfwText}`
+                            ? `Browsing Wyvern Chat${nsfwText}${liveLoadingText}`
                             : state.isSaucepan
-                                ? `Browsing Saucepan.ai - page ${saucepanApiState.page || 1}${saucepanApiState.total ? ` of ${Math.ceil(saucepanApiState.total / (saucepanApiState.limit || 24))} (${Number(saucepanApiState.total).toLocaleString()} total)` : ''}${nsfwText}`
+                                ? `Browsing Saucepan.ai - page ${saucepanApiState.page || 1}${saucepanApiState.total ? ` of ${Math.ceil(saucepanApiState.total / (saucepanApiState.limit || 24))} (${Number(saucepanApiState.total).toLocaleString()} total)` : ''}${nsfwText}${liveLoadingText}`
                                 : state.isBotbooru
-                                    ? `Browsing BotBooru - page ${botbooruApiState.page || 1}${botbooruApiState.total ? ` of ${Math.ceil(botbooruApiState.total / (botbooruApiState.limit || 24))} (${Number(botbooruApiState.total).toLocaleString()} total)` : ''}${nsfwText}`
+                                    ? `Browsing BotBooru - page ${botbooruApiState.page || 1}${botbooruApiState.total ? ` of ${Math.ceil(botbooruApiState.total / (botbooruApiState.limit || 24))} (${Number(botbooruApiState.total).toLocaleString()} total)` : ''}${nsfwText}${liveLoadingText}`
                                     : `${cardsWithImages.length} card${cardsWithImages.length !== 1 ? 's' : ''} found${nsfwText}`;
     menuContent.innerHTML = createBrowserHeader(serviceDisplayName, state.filters.search, cardCountText, searchCollapsed, hideNsfw, state.isLiveChub, state.advancedFilters, state.isJannyAI, state.jannyAdvancedFilters, state.isCharacterTavern, state.ctAdvancedFilters, state.isWyvern, state.wyvernAdvancedFilters, state.isRisuRealm);
 
@@ -854,6 +1458,54 @@ export async function createCardBrowser(serviceName, cards, state, extensionName
     }
 
     console.log('[CleanBotBrowser] Card browser created with', sortedCards.length, 'cards');
+
+    if (state.queryMode === LIVE_QUERY_MODES.paged && state.queryKey) {
+        const warmPage = Number(state.lastVisitedPage || state.currentPage || 1) || 1;
+        const cachedWarmPage = getCachedPage(state.queryKey, warmPage);
+        if (!cachedWarmPage || cachedWarmPage.isStale) {
+            setTimeout(() => {
+                loadPagedProviderPageIntoBrowser({
+                    state,
+                    pageNum: warmPage,
+                    menuContent,
+                    showCardDetailFunc,
+                    extensionName,
+                    extension_settings,
+                    forceRefresh: true,
+                    background: true,
+                }).catch(error => console.warn('[CleanBotBrowser] Background live query refresh failed:', error));
+            }, 20);
+        } else if (cachedWarmPage.meta?.hasMore && liveQueryContext?.prefetchNext) {
+            prefetchNextPage(state.queryKey, warmPage, () => fetchServerPagedProviderPage(state, warmPage + 1, extensionName, extension_settings), liveQueryContext);
+        }
+    } else if (isInstantShell && (state.isLiveChub || state.isAnchorhold)) {
+        const apiState = state.isLiveChub
+            ? (state.isLorebooks ? getChubLorebooksApiState() : getChubApiState())
+            : getAnchorholdApiState();
+        const loadMoreFunc = state.isLiveChub
+            ? (state.isLorebooks ? loadMoreChubLorebooks : loadMoreChubCards)
+            : loadMoreAnchorholdCards;
+
+        setTimeout(() => {
+            loadCardsUntilTarget({
+                state,
+                extensionName,
+                extension_settings,
+                targetCount: cardsPerPage,
+                loadMoreFunc,
+                apiState,
+            }).then(({ error }) => {
+                if (error || !menuContent?.isConnected) return;
+                state.isRefreshing = false;
+                state.totalPages = Math.max(1, Math.ceil(state.filteredCards.length / cardsPerPage));
+                scheduleDeferredFilterRefresh(state, menuContent);
+                renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
+                refreshLiveResultsCount(menuContent, state, extensionName, extension_settings);
+            }).catch(fetchError => {
+                console.warn('[CleanBotBrowser] Instant shell background load failed:', fetchError);
+            });
+        }, 10);
+    }
 }
 
 // Update filter dropdowns
@@ -1066,6 +1718,24 @@ function setupBrowserEventListeners(menuContent, state, extensionName, extension
     const searchInput = menuContent.querySelector('.bot-browser-search-input');
     searchInput.addEventListener('input', debounce(async (e) => {
         state.filters.search = e.target.value;
+        if (state.queryMode === LIVE_QUERY_MODES.paged && (state.isJannyAI || state.isCharacterTavern || state.isWyvern || state.isRisuRealm || state.isSaucepan || state.isBotbooru)) {
+            try {
+                state.liveQuerySnapshot = null;
+                state.pageCacheView = null;
+                await loadPagedProviderPageIntoBrowser({
+                    state,
+                    pageNum: 1,
+                    menuContent,
+                    showCardDetailFunc,
+                    extensionName,
+                    extension_settings,
+                    forceRefresh: false,
+                });
+            } catch (error) {
+                console.error('[CleanBotBrowser] Live paged search failed:', error);
+            }
+            return;
+        }
 
         // For live Chub, trigger fresh API search
         if (state.isLiveChub) {
@@ -1435,6 +2105,31 @@ function setupBrowserEventListeners(menuContent, state, extensionName, extension
 
         savePersistentSearch(extensionName, extension_settings, state.currentService, state.filters, state.sortBy, state.advancedFilters, state.jannyAdvancedFilters, state.ctAdvancedFilters, state.wyvernAdvancedFilters);
 
+        if (state.queryMode === LIVE_QUERY_MODES.paged && (state.isJannyAI || state.isCharacterTavern || state.isWyvern || state.isRisuRealm || state.isSaucepan || state.isBotbooru)) {
+            try {
+                clearButton.disabled = true;
+                clearButton.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+                state.liveQuerySnapshot = null;
+                state.pageCacheView = null;
+                await loadPagedProviderPageIntoBrowser({
+                    state,
+                    pageNum: 1,
+                    menuContent,
+                    showCardDetailFunc,
+                    extensionName,
+                    extension_settings,
+                    forceRefresh: false,
+                });
+            } catch (error) {
+                console.error('[CleanBotBrowser] Failed to clear paged live filters:', error);
+                toastr.error('Failed to clear filters: ' + error.message);
+            } finally {
+                clearButton.disabled = false;
+                clearButton.innerHTML = '<i class="fa-solid fa-times"></i> Clear Filters';
+            }
+            return;
+        }
+
         // For live Chub, make a fresh API call with cleared filters
         if (state.isLiveChub) {
             try {
@@ -1652,52 +2347,9 @@ function setupJannyAdvancedFilterListeners(menuContent, state, extensionName, ex
         try {
             applyBtn.disabled = true;
             applyBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Searching...';
-
-            resetJannyApiState();
-
-            // Map sort options to JannyAI format
-            let jannySort = 'createdAtStamp:desc';
-            switch (state.sortBy) {
-                case 'date_desc': jannySort = 'createdAtStamp:desc'; break;
-                case 'date_asc': jannySort = 'createdAtStamp:asc'; break;
-                case 'tokens_desc': jannySort = 'totalToken:desc'; break;
-                case 'tokens_asc': jannySort = 'totalToken:asc'; break;
-                default: jannySort = 'createdAtStamp:desc';
-            }
-
-            const searchResults = await searchJannyCharacters({
-                search: state.filters.search,
-                page: 1,
-                limit: 40,
-                sort: jannySort,
-                minTokens: state.jannyAdvancedFilters.minTokens || 29,
-                maxTokens: state.jannyAdvancedFilters.maxTokens || 4101
-            });
-
-            const results = searchResults.results?.[0] || {};
-            const cards = (results.hits || []).map(hit => transformJannyCard(hit));
-            state.currentCards = cards;
-
-            jannyApiState.lastSearch = state.filters.search;
-            jannyApiState.lastSort = jannySort;
-            jannyApiState.hasMore = (results.totalHits || 0) > cards.length;
-
-            // For JannyAI, search is done server-side by the API
-            // Clear Fuse to prevent stale client-side search from overriding API results
-            state.fuse = null;
-
-            // Apply client-side filters (blocklist, NSFW) and sort
-            const filteredCards = applyClientSideFilters(cards, state, extensionName, extension_settings);
-            state.filteredCards = sortCards(filteredCards, state.sortBy);
-            state.currentPage = 1;
-
-            updateCachedFiltersAndDropdowns(state, menuContent);
-            renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
-
-            const countContainer = menuContent.querySelector('.bot-browser-results-count');
-            if (countContainer) {
-                countContainer.textContent = `Browsing JannyAI (${filteredCards.length} cards loaded)`;
-            }
+            state.liveQuerySnapshot = null;
+            state.pageCacheView = null;
+            await loadPagedProviderPageIntoBrowser({ state, pageNum: 1, menuContent, showCardDetailFunc, extensionName, extension_settings });
         } catch (error) {
             console.error('[CleanBotBrowser] JannyAI advanced filter search failed:', error);
             toastr.error('Failed to apply filters: ' + error.message);
@@ -1749,38 +2401,9 @@ function setupCTAdvancedFilterListeners(menuContent, state, extensionName, exten
         try {
             applyBtn.disabled = true;
             applyBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Searching...';
-
-            resetCharacterTavernState();
-
-            const cards = await searchCharacterTavern({
-                query: state.filters.search,
-                page: 1,
-                limit: 30,
-                hasLorebook: state.ctAdvancedFilters.hasLorebook || undefined,
-                isOC: state.ctAdvancedFilters.isOC || undefined,
-                minTokens: state.ctAdvancedFilters.minTokens || undefined,
-                maxTokens: state.ctAdvancedFilters.maxTokens || undefined,
-                tags: state.ctAdvancedFilters.tags
-            });
-
-            state.currentCards = cards;
-
-            // For CT, search is done server-side by the API
-            // Clear Fuse to prevent stale client-side search from overriding API results
-            state.fuse = null;
-
-            // Apply client-side filters (blocklist, NSFW) and sort
-            const filteredCards = applyClientSideFilters(cards, state, extensionName, extension_settings);
-            state.filteredCards = sortCards(filteredCards, state.sortBy);
-            state.currentPage = 1;
-
-            updateCachedFiltersAndDropdowns(state, menuContent);
-            renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
-
-            const countContainer = menuContent.querySelector('.bot-browser-results-count');
-            if (countContainer) {
-                countContainer.textContent = `Browsing Character Tavern (${filteredCards.length} cards loaded)`;
-            }
+            state.liveQuerySnapshot = null;
+            state.pageCacheView = null;
+            await loadPagedProviderPageIntoBrowser({ state, pageNum: 1, menuContent, showCardDetailFunc, extensionName, extension_settings });
         } catch (error) {
             console.error('[CleanBotBrowser] Character Tavern advanced filter search failed:', error);
             toastr.error('Failed to apply filters: ' + error.message);
@@ -1829,56 +2452,9 @@ function setupWyvernAdvancedFilterListeners(menuContent, state, extensionName, e
         try {
             applyBtn.disabled = true;
             applyBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Searching...';
-
-            if (state.isWyvernLorebooks) {
-                resetWyvernLorebooksApiState();
-            } else {
-                resetWyvernApiState();
-            }
-
-            // Map sort options to Wyvern format
-            let wyvernSort = 'votes';
-            let wyvernOrder = 'DESC';
-            switch (state.sortBy) {
-                case 'date_desc': wyvernSort = 'created_at'; wyvernOrder = 'DESC'; break;
-                case 'date_asc': wyvernSort = 'created_at'; wyvernOrder = 'ASC'; break;
-                case 'name_asc': wyvernSort = 'name'; wyvernOrder = 'ASC'; break;
-                case 'name_desc': wyvernSort = 'name'; wyvernOrder = 'DESC'; break;
-                default: wyvernSort = 'votes'; wyvernOrder = 'DESC';
-            }
-
-            const searchFunc = state.isWyvernLorebooks ? searchWyvernLorebooks : searchWyvernCharacters;
-            const transformFunc = state.isWyvernLorebooks ? transformWyvernLorebook : transformWyvernCard;
-
-            const result = await searchFunc({
-                search: state.filters.search,
-                page: 1,
-                limit: 40,
-                sort: wyvernSort,
-                order: wyvernOrder,
-                tags: state.wyvernAdvancedFilters.tags,
-                rating: state.wyvernAdvancedFilters.rating !== 'all' ? state.wyvernAdvancedFilters.rating : undefined,
-                hideNsfw: false // Don't use hideNsfw when explicit rating is set
-            });
-
-            const cards = result.results.map(transformFunc);
-            state.currentCards = cards;
-
-            // Clear Fuse for server-side search
-            state.fuse = null;
-
-            // Apply client-side filters (blocklist, etc.) but NOT NSFW filter when rating is explicitly set
-            const filteredCards = applyClientSideFilters(cards, state, extensionName, extension_settings);
-            state.filteredCards = sortCards(filteredCards, state.sortBy);
-            state.currentPage = 1;
-
-            updateCachedFiltersAndDropdowns(state, menuContent);
-            renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
-
-            const countContainer = menuContent.querySelector('.bot-browser-results-count');
-            if (countContainer) {
-                countContainer.textContent = `Browsing Wyvern Chat (${filteredCards.length} cards loaded)`;
-            }
+            state.liveQuerySnapshot = null;
+            state.pageCacheView = null;
+            await loadPagedProviderPageIntoBrowser({ state, pageNum: 1, menuContent, showCardDetailFunc, extensionName, extension_settings });
         } catch (error) {
             console.error('[CleanBotBrowser] Wyvern advanced filter search failed:', error);
             toastr.error('Failed to apply filters: ' + error.message);
@@ -2044,6 +2620,29 @@ function setupCustomDropdown(container, state, filterType, extensionName, extens
             dropdown.classList.remove('open');
         } else if (filterType === 'sort') {
             state.sortBy = value;
+
+            if (state.queryMode === LIVE_QUERY_MODES.paged && (state.isJannyAI || state.isCharacterTavern || state.isWyvern || state.isRisuRealm || state.isSaucepan || state.isBotbooru)) {
+                (async () => {
+                    try {
+                        state.liveQuerySnapshot = null;
+                        state.pageCacheView = null;
+                        await loadPagedProviderPageIntoBrowser({
+                            state,
+                            pageNum: 1,
+                            menuContent: document.querySelector('.bot-browser-content'),
+                            showCardDetailFunc,
+                            extensionName,
+                            extension_settings,
+                            forceRefresh: false,
+                        });
+                    } catch (error) {
+                        console.error('[CleanBotBrowser] Live paged sort failed:', error);
+                    }
+                })();
+                savePersistentSearch(extensionName, extension_settings, state.currentService, state.filters, state.sortBy, state.advancedFilters, state.jannyAdvancedFilters, state.ctAdvancedFilters, state.wyvernAdvancedFilters);
+                dropdown.classList.remove('open');
+                return;
+            }
 
             // For live Chub, trigger fresh API call with new sort
             if (state.isLiveChub) {
@@ -2326,7 +2925,9 @@ function renderPage(state, menuContent, showCardDetailFunc, extensionName, exten
     // Calculate which cards to show
     const startIndex = (state.currentPage - 1) * cardsPerPage;
     const endIndex = startIndex + cardsPerPage;
-    const pageCards = state.filteredCards.slice(startIndex, endIndex);
+    const pageCards = state.queryMode === LIVE_QUERY_MODES.paged && Array.isArray(state.pageCacheView)
+        ? state.pageCacheView
+        : state.filteredCards.slice(startIndex, endIndex);
 
     // Create HTML for page cards
     const cardsHTML = pageCards.map(card => createCardHTML(card)).join('');
@@ -2474,7 +3075,15 @@ function renderPage(state, menuContent, showCardDetailFunc, extensionName, exten
 
     // Scroll to top after rendering
     const wrapper = menuContent.querySelector('.bot-browser-card-grid-wrapper');
-    if (wrapper) wrapper.scrollTop = 0;
+    if (wrapper) {
+        if (state.preserveGridScrollOnRender) {
+            wrapper.scrollTop = Number(state.preservedGridScrollTop || 0);
+            state.preserveGridScrollOnRender = false;
+            state.preservedGridScrollTop = 0;
+        } else {
+            wrapper.scrollTop = 0;
+        }
+    }
 
     // Validate images with Intersection Observer (no delay needed)
     validateCardImages();
@@ -2559,6 +3168,14 @@ function setupChubPaginationListeners(gridContainer, state, menuContent, showCar
                 if (state.filteredCards.length > nextPageStart) {
                     state.currentPage++;
                     renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
+                    prefetchAppendBuffer({
+                        state,
+                        extensionName,
+                        extension_settings,
+                        targetCount: (state.currentPage + 1) * cardsPerPage,
+                        loadMoreFunc,
+                        apiState,
+                    });
                 } else {
                     // No more cards available after filtering
                     toastr.info('No more cards available (all remaining cards were filtered out)');
@@ -2603,6 +3220,14 @@ function setupAnchorholdPaginationListeners(gridContainer, state, menuContent, s
                 state.currentPage++;
                 console.log(`[CleanBotBrowser] Anchorhold UI page cached forward -> ${state.currentPage} (${state.filteredCards.length} cached filtered cards)`);
                 renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
+                prefetchAppendBuffer({
+                    state,
+                    extensionName,
+                    extension_settings,
+                    targetCount: (state.currentPage + 1) * cardsPerPage,
+                    loadMoreFunc: loadMoreAnchorholdCards,
+                    apiState,
+                });
                 return;
             }
 
@@ -2645,6 +3270,14 @@ function setupAnchorholdPaginationListeners(gridContainer, state, menuContent, s
                     state.currentPage++;
                     console.log(`[CleanBotBrowser] Anchorhold UI page fetched forward -> ${state.currentPage} (${state.filteredCards.length} cached filtered cards, ${fetchedBatches} remote batches, ${addedCards} unique raw cards added)`);
                     renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
+                    prefetchAppendBuffer({
+                        state,
+                        extensionName,
+                        extension_settings,
+                        targetCount: (state.currentPage + 1) * cardsPerPage,
+                        loadMoreFunc: loadMoreAnchorholdCards,
+                        apiState,
+                    });
                 } else if (!apiState.hasMore) {
                     toastr.info('No more Anchorhold cards available');
                     renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
@@ -2670,43 +3303,15 @@ function setupJannyPaginationListeners(gridContainer, state, menuContent, showCa
     pagination.querySelectorAll('.bot-browser-pagination-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
             const action = btn.dataset.action;
-
-            // Helper to fetch and display an API page
-            const fetchApiPage = async (pageNum) => {
+            const currentPage = Number(state.lastVisitedPage || jannyApiState.page || 1) || 1;
+            const cachedPage = state.queryKey ? getCachedPage(state.queryKey, currentPage) : null;
+            const hasMore = cachedPage?.meta?.hasMore ?? jannyApiState.hasMore;
+            const targetPage = action === 'prev' ? currentPage - 1 : currentPage + 1;
+            if ((action === 'prev' && currentPage > 1) || (action === 'next' && hasMore)) {
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
-
                 try {
-                    console.log(`[CleanBotBrowser] Fetching JannyAI API page ${pageNum}`);
-
-                    const searchResults = await searchJannyCharacters({
-                        search: jannyApiState.lastSearch,
-                        page: pageNum,
-                        limit: 40,
-                        sort: jannyApiState.lastSort,
-                        minTokens: state.jannyAdvancedFilters?.minTokens || 29,
-                        maxTokens: state.jannyAdvancedFilters?.maxTokens || 4101
-                    });
-
-                    const results = searchResults.results?.[0] || {};
-                    const cards = (results.hits || []).map(hit => transformJannyCard(hit));
-
-                    // Update API state
-                    jannyApiState.page = pageNum;
-                    jannyApiState.hasMore = (results.totalHits || 0) > (pageNum * 40);
-
-                    // REPLACE cards (not accumulate)
-                    state.currentCards = cards;
-
-                    // For JannyAI, search is done server-side by the API
-                    // Clear Fuse to prevent stale client-side search from overriding API results
-                    state.fuse = null;
-                    state.filteredCards = applyClientSideFilters(cards, state, extensionName, extension_settings);
-
-                    updateCachedFiltersAndDropdowns(state, menuContent);
-                    renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
-
-                    console.log(`[CleanBotBrowser] Displaying JannyAI API page ${pageNum} (${cards.length} cards)`);
+                    await loadPagedProviderPageIntoBrowser({ state, pageNum: targetPage, menuContent, showCardDetailFunc, extensionName, extension_settings });
                 } catch (error) {
                     console.error('[CleanBotBrowser] Failed to fetch JannyAI page:', error);
                     toastr.error('Failed to load page');
@@ -2716,12 +3321,6 @@ function setupJannyPaginationListeners(gridContainer, state, menuContent, showCa
                         ? 'Next <i class="fa-solid fa-angle-right"></i>'
                         : '<i class="fa-solid fa-angle-left"></i> Previous';
                 }
-            };
-
-            if (action === 'prev' && jannyApiState.page > 1) {
-                await fetchApiPage(jannyApiState.page - 1);
-            } else if (action === 'next' && jannyApiState.hasMore) {
-                await fetchApiPage(jannyApiState.page + 1);
             }
         });
     });
@@ -2737,38 +3336,15 @@ function setupCTPaginationListeners(gridContainer, state, menuContent, showCardD
     pagination.querySelectorAll('.bot-browser-pagination-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
             const action = btn.dataset.action;
-
-            // Helper to fetch and display an API page
-            const fetchApiPage = async (pageNum) => {
+            const currentPage = Number(state.lastVisitedPage || ctApiState.page || 1) || 1;
+            const cachedPage = state.queryKey ? getCachedPage(state.queryKey, currentPage) : null;
+            const hasMore = cachedPage?.meta?.hasMore ?? ctApiState.hasMore;
+            const targetPage = action === 'prev' ? currentPage - 1 : currentPage + 1;
+            if ((action === 'prev' && currentPage > 1) || (action === 'next' && hasMore)) {
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
-
                 try {
-                    console.log(`[CleanBotBrowser] Fetching Character Tavern API page ${pageNum}`);
-
-                    const cards = await searchCharacterTavern({
-                        query: state.filters.search,
-                        page: pageNum,
-                        limit: 30,
-                        hasLorebook: state.ctAdvancedFilters?.hasLorebook || undefined,
-                        isOC: state.ctAdvancedFilters?.isOC || undefined,
-                        minTokens: state.ctAdvancedFilters?.minTokens || undefined,
-                        maxTokens: state.ctAdvancedFilters?.maxTokens || undefined,
-                        tags: state.ctAdvancedFilters?.tags || []
-                    });
-
-                    // REPLACE cards (not accumulate)
-                    state.currentCards = cards;
-
-                    // For CT, search is done server-side by the API
-                    // Clear Fuse to prevent stale client-side search from overriding API results
-                    state.fuse = null;
-                    state.filteredCards = applyClientSideFilters(cards, state, extensionName, extension_settings);
-
-                    updateCachedFiltersAndDropdowns(state, menuContent);
-                    renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
-
-                    console.log(`[CleanBotBrowser] Displaying Character Tavern API page ${pageNum} (${cards.length} cards)`);
+                    await loadPagedProviderPageIntoBrowser({ state, pageNum: targetPage, menuContent, showCardDetailFunc, extensionName, extension_settings });
                 } catch (error) {
                     console.error('[CleanBotBrowser] Failed to fetch Character Tavern page:', error);
                     toastr.error('Failed to load page');
@@ -2778,12 +3354,6 @@ function setupCTPaginationListeners(gridContainer, state, menuContent, showCardD
                         ? 'Next <i class="fa-solid fa-angle-right"></i>'
                         : '<i class="fa-solid fa-angle-left"></i> Previous';
                 }
-            };
-
-            if (action === 'prev' && ctApiState.page > 1) {
-                await fetchApiPage(ctApiState.page - 1);
-            } else if (action === 'next' && ctApiState.hasMore) {
-                await fetchApiPage(ctApiState.page + 1);
             }
         });
     });
@@ -2799,54 +3369,15 @@ function setupWyvernPaginationListeners(gridContainer, state, menuContent, showC
     pagination.querySelectorAll('.bot-browser-pagination-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
             const action = btn.dataset.action;
-
-            // Helper to fetch and display an API page
-            const fetchApiPage = async (pageNum) => {
+            const currentPage = Number(state.lastVisitedPage || wyvernApiState.page || 1) || 1;
+            const cachedPage = state.queryKey ? getCachedPage(state.queryKey, currentPage) : null;
+            const hasMore = cachedPage?.meta?.hasMore ?? wyvernApiState.hasMore;
+            const targetPage = action === 'prev' ? currentPage - 1 : currentPage + 1;
+            if ((action === 'prev' && currentPage > 1) || (action === 'next' && hasMore)) {
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
-
                 try {
-                    console.log(`[CleanBotBrowser] Fetching Wyvern API page ${pageNum}`);
-
-                    // Map sort options to Wyvern format
-                    let wyvernSort = 'votes';
-                    let wyvernOrder = 'DESC';
-                    switch (state.sortBy) {
-                        case 'date_desc': wyvernSort = 'created_at'; wyvernOrder = 'DESC'; break;
-                        case 'date_asc': wyvernSort = 'created_at'; wyvernOrder = 'ASC'; break;
-                        case 'name_asc': wyvernSort = 'name'; wyvernOrder = 'ASC'; break;
-                        case 'name_desc': wyvernSort = 'name'; wyvernOrder = 'DESC'; break;
-                        default: wyvernSort = 'votes'; wyvernOrder = 'DESC';
-                    }
-
-                    const searchFunc = state.isWyvernLorebooks ? searchWyvernLorebooks : searchWyvernCharacters;
-                    const transformFunc = state.isWyvernLorebooks ? transformWyvernLorebook : transformWyvernCard;
-
-                    const result = await searchFunc({
-                        search: state.filters.search,
-                        page: pageNum,
-                        limit: 40,
-                        sort: wyvernSort,
-                        order: wyvernOrder,
-                        tags: state.wyvernAdvancedFilters?.tags || [],
-                        rating: state.wyvernAdvancedFilters?.rating !== 'all' ? state.wyvernAdvancedFilters?.rating : undefined,
-                        hideNsfw: !state.wyvernAdvancedFilters?.rating ? extension_settings[extensionName].hideNsfw : false
-                    });
-
-                    const cards = result.results.map(transformFunc);
-
-                    // REPLACE cards (not accumulate)
-                    state.currentCards = cards;
-
-                    // For Wyvern, search is done server-side by the API
-                    // Clear Fuse to prevent stale client-side search from overriding API results
-                    state.fuse = null;
-                    state.filteredCards = applyClientSideFilters(cards, state, extensionName, extension_settings);
-
-                    updateCachedFiltersAndDropdowns(state, menuContent);
-                    renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
-
-                    console.log(`[CleanBotBrowser] Displaying Wyvern API page ${pageNum} (${cards.length} cards)`);
+                    await loadPagedProviderPageIntoBrowser({ state, pageNum: targetPage, menuContent, showCardDetailFunc, extensionName, extension_settings });
                 } catch (error) {
                     console.error('[CleanBotBrowser] Failed to fetch Wyvern page:', error);
                     toastr.error('Failed to load page');
@@ -2856,12 +3387,6 @@ function setupWyvernPaginationListeners(gridContainer, state, menuContent, showC
                         ? 'Next <i class="fa-solid fa-angle-right"></i>'
                         : '<i class="fa-solid fa-angle-left"></i> Previous';
                 }
-            };
-
-            if (action === 'prev' && wyvernApiState.page > 1) {
-                await fetchApiPage(wyvernApiState.page - 1);
-            } else if (action === 'next' && wyvernApiState.hasMore) {
-                await fetchApiPage(wyvernApiState.page + 1);
             }
         });
     });
@@ -2876,27 +3401,15 @@ function setupChubTrendingPaginationListeners(gridContainer, state, menuContent,
         btn.addEventListener('click', async () => {
             const action = btn.dataset.action;
 
-            const fetchApiPage = async (pageNum) => {
+            const currentPage = Number(state.lastVisitedPage || chubTrendingState.page || 1) || 1;
+            const cachedPage = state.queryKey ? getCachedPage(state.queryKey, currentPage) : null;
+            const hasMore = cachedPage?.meta?.hasMore ?? chubTrendingState.hasMore;
+            const targetPage = action === 'prev' ? currentPage - 1 : currentPage + 1;
+            if ((action === 'prev' && currentPage > 1) || (action === 'next' && hasMore)) {
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
-
                 try {
-                    console.log(`[CleanBotBrowser] Fetching Chub trending page ${pageNum}`);
-                    const result = await fetchChubTrending({
-                        page: pageNum,
-                        limit: 48,
-                        nsfw: !extension_settings[extensionName].hideNsfw
-                    });
-                    const cards = (result.nodes || []).map(transformChubTrendingCard);
-
-                    // Replace current cards with new page
-                    state.currentCards = cards;
-                    state.filteredCards = applyClientSideFilters(cards, state, extensionName, extension_settings);
-                    state.currentPage = 1;
-                    state.totalPages = 1;
-
-                    renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
-                    console.log(`[CleanBotBrowser] Displaying Chub trending page ${pageNum} (${cards.length} cards)`);
+                    await loadPagedProviderPageIntoBrowser({ state, pageNum: targetPage, menuContent, showCardDetailFunc, extensionName, extension_settings });
                 } catch (error) {
                     console.error('[CleanBotBrowser] Failed to fetch Chub trending page:', error);
                     toastr.error('Failed to load page');
@@ -2906,12 +3419,6 @@ function setupChubTrendingPaginationListeners(gridContainer, state, menuContent,
                         ? 'Next <i class="fa-solid fa-angle-right"></i>'
                         : '<i class="fa-solid fa-angle-left"></i> Previous';
                 }
-            };
-
-            if (action === 'prev' && chubTrendingState.page > 1) {
-                await fetchApiPage(chubTrendingState.page - 1);
-            } else if (action === 'next' && chubTrendingState.hasMore) {
-                await fetchApiPage(chubTrendingState.page + 1);
             }
         });
     });
@@ -2926,23 +3433,15 @@ function setupJannyTrendingPaginationListeners(gridContainer, state, menuContent
         btn.addEventListener('click', async () => {
             const action = btn.dataset.action;
 
-            const fetchApiPage = async (pageNum) => {
+            const currentPage = Number(state.lastVisitedPage || jannyTrendingState.page || 1) || 1;
+            const cachedPage = state.queryKey ? getCachedPage(state.queryKey, currentPage) : null;
+            const hasMore = cachedPage?.meta?.hasMore ?? jannyTrendingState.hasMore;
+            const targetPage = action === 'prev' ? currentPage - 1 : currentPage + 1;
+            if ((action === 'prev' && currentPage > 1) || (action === 'next' && hasMore)) {
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
-
                 try {
-                    console.log(`[CleanBotBrowser] Fetching JanitorAI/JannyAI trending page ${pageNum}`);
-                    const result = await fetchJannyTrending({ page: pageNum, limit: 40 });
-                    const cards = (result.characters || []).map(transformJannyTrendingCard);
-
-                    // Replace current cards with new page
-                    state.currentCards = cards;
-                    state.filteredCards = applyClientSideFilters(cards, state, extensionName, extension_settings);
-                    state.currentPage = 1;
-                    state.totalPages = 1;
-
-                    renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
-                    console.log(`[CleanBotBrowser] Displaying JanitorAI/JannyAI trending page ${pageNum} (${cards.length} cards)`);
+                    await loadPagedProviderPageIntoBrowser({ state, pageNum: targetPage, menuContent, showCardDetailFunc, extensionName, extension_settings });
                 } catch (error) {
                     console.error('[CleanBotBrowser] Failed to fetch JannyAI trending page:', error);
                     toastr.error('Failed to load page');
@@ -2952,12 +3451,6 @@ function setupJannyTrendingPaginationListeners(gridContainer, state, menuContent
                         ? 'Next <i class="fa-solid fa-angle-right"></i>'
                         : '<i class="fa-solid fa-angle-left"></i> Previous';
                 }
-            };
-
-            if (action === 'prev' && jannyTrendingState.page > 1) {
-                await fetchApiPage(jannyTrendingState.page - 1);
-            } else if (action === 'next' && jannyTrendingState.hasMore) {
-                await fetchApiPage(jannyTrendingState.page + 1);
             }
         });
     });
@@ -2972,28 +3465,15 @@ function setupWyvernTrendingPaginationListeners(gridContainer, state, menuConten
         btn.addEventListener('click', async () => {
             const action = btn.dataset.action;
 
-            const fetchApiPage = async (pageNum) => {
+            const currentPage = Number(state.lastVisitedPage || wyvernTrendingState.page || 1) || 1;
+            const cachedPage = state.queryKey ? getCachedPage(state.queryKey, currentPage) : null;
+            const hasMore = cachedPage?.meta?.hasMore ?? wyvernTrendingState.hasMore;
+            const targetPage = action === 'prev' ? currentPage - 1 : currentPage + 1;
+            if ((action === 'prev' && currentPage > 1) || (action === 'next' && hasMore)) {
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
-
                 try {
-                    console.log(`[CleanBotBrowser] Fetching Wyvern trending page ${pageNum}`);
-                    const result = await fetchWyvernTrending({
-                        page: pageNum,
-                        limit: 40,
-                        sort: 'nsfw-popular',
-                        rating: extension_settings[extensionName].hideNsfw ? 'none' : 'all'
-                    });
-                    const cards = (result.results || []).map(transformWyvernTrendingCard);
-
-                    // Replace current cards with new page
-                    state.currentCards = cards;
-                    state.filteredCards = applyClientSideFilters(cards, state, extensionName, extension_settings);
-                    state.currentPage = 1;
-                    state.totalPages = 1;
-
-                    renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
-                    console.log(`[CleanBotBrowser] Displaying Wyvern trending page ${pageNum} (${cards.length} cards)`);
+                    await loadPagedProviderPageIntoBrowser({ state, pageNum: targetPage, menuContent, showCardDetailFunc, extensionName, extension_settings });
                 } catch (error) {
                     console.error('[CleanBotBrowser] Failed to fetch Wyvern trending page:', error);
                     toastr.error('Failed to load page');
@@ -3003,12 +3483,6 @@ function setupWyvernTrendingPaginationListeners(gridContainer, state, menuConten
                         ? 'Next <i class="fa-solid fa-angle-right"></i>'
                         : '<i class="fa-solid fa-angle-left"></i> Previous';
                 }
-            };
-
-            if (action === 'prev' && wyvernTrendingState.page > 1) {
-                await fetchApiPage(wyvernTrendingState.page - 1);
-            } else if (action === 'next' && wyvernTrendingState.hasMore) {
-                await fetchApiPage(wyvernTrendingState.page + 1);
             }
         });
     });
@@ -3022,30 +3496,15 @@ function setupRisuRealmTrendingPaginationListeners(gridContainer, state, menuCon
         btn.addEventListener('click', async () => {
             const action = btn.dataset.action;
 
-            const fetchApiPage = async (pageNum) => {
+            const currentPage = Number(state.lastVisitedPage || risuRealmApiState.page || 1) || 1;
+            const cachedPage = state.queryKey ? getCachedPage(state.queryKey, currentPage) : null;
+            const hasMore = cachedPage?.meta?.hasMore ?? risuRealmApiState.hasMore;
+            const targetPage = action === 'prev' ? currentPage - 1 : currentPage + 1;
+            if ((action === 'prev' && currentPage > 1) || (action === 'next' && hasMore)) {
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
-
                 try {
-                    console.log(`[CleanBotBrowser] Fetching RisuRealm trending page ${pageNum}`);
-                    const result = await fetchRisuRealmTrending({
-                        page: pageNum,
-                        nsfw: !extension_settings[extensionName].hideNsfw
-                    });
-                    const cards = result.cards.map(card => ({
-                        ...transformRisuRealmCard(card),
-                        sourceService: 'risuai_realm_trending',
-                        isTrending: true
-                    }));
-
-                    // Replace current cards with new page
-                    state.currentCards = cards;
-                    state.filteredCards = applyClientSideFilters(cards, state, extensionName, extension_settings);
-                    state.currentPage = 1;
-                    state.totalPages = 1;
-
-                    renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
-                    console.log(`[CleanBotBrowser] Displaying RisuRealm trending page ${pageNum} (${cards.length} cards)`);
+                    await loadPagedProviderPageIntoBrowser({ state, pageNum: targetPage, menuContent, showCardDetailFunc, extensionName, extension_settings });
                 } catch (error) {
                     console.error('[CleanBotBrowser] Failed to fetch RisuRealm trending page:', error);
                     toastr.error('Failed to load page');
@@ -3055,12 +3514,6 @@ function setupRisuRealmTrendingPaginationListeners(gridContainer, state, menuCon
                         ? 'Next <i class="fa-solid fa-angle-right"></i>'
                         : '<i class="fa-solid fa-angle-left"></i> Previous';
                 }
-            };
-
-            if (action === 'prev' && risuRealmApiState.page > 1) {
-                await fetchApiPage(risuRealmApiState.page - 1);
-            } else if (action === 'next' && risuRealmApiState.hasMore) {
-                await fetchApiPage(risuRealmApiState.page + 1);
             }
         });
     });
@@ -3203,14 +3656,16 @@ function setupRisuRealmPaginationListeners(gridContainer, state, menuContent, sh
     pagination.querySelectorAll('.bot-browser-pagination-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
             const action = btn.dataset.action;
-            let targetPage = risuRealmApiState.page;
-
-            if (action === 'next' && risuRealmApiState.hasMore) {
-                targetPage = risuRealmApiState.page + 1;
-            } else if (action === 'prev' && risuRealmApiState.page > 1) {
-                targetPage = risuRealmApiState.page - 1;
+            const currentPage = Number(state.lastVisitedPage || risuRealmApiState.page || 1) || 1;
+            const cachedPage = state.queryKey ? getCachedPage(state.queryKey, currentPage) : null;
+            const hasMore = cachedPage?.meta?.hasMore ?? risuRealmApiState.hasMore;
+            let targetPage = currentPage;
+            if (action === 'next' && hasMore) {
+                targetPage = currentPage + 1;
+            } else if (action === 'prev' && currentPage > 1) {
+                targetPage = currentPage - 1;
             } else {
-                return; // No valid action
+                return;
             }
 
             btn.disabled = true;
@@ -3218,28 +3673,7 @@ function setupRisuRealmPaginationListeners(gridContainer, state, menuContent, sh
             btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
 
             try {
-                console.log(`[CleanBotBrowser] Loading RisuRealm page ${targetPage}`);
-                const result = await searchRisuRealm({
-                    page: targetPage,
-                    sort: risuRealmApiState.lastSort,
-                    search: risuRealmApiState.lastSearch,
-                    nsfw: !extension_settings[extensionName].hideNsfw
-                });
-
-                const cards = result.cards.map(card => ({
-                    ...transformRisuRealmCard(card),
-                    sourceService: 'risuai_realm',
-                    isLiveApi: true
-                }));
-
-                // Replace cards (page navigation style)
-                state.currentCards = cards;
-                state.filteredCards = applyClientSideFilters(state.currentCards, state, extensionName, extension_settings);
-                state.currentPage = 1;
-                state.totalPages = 1;
-
-                renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
-                console.log(`[CleanBotBrowser] Loaded RisuRealm page ${risuRealmApiState.page} (${cards.length} cards)`);
+                await loadPagedProviderPageIntoBrowser({ state, pageNum: targetPage, menuContent, showCardDetailFunc, extensionName, extension_settings });
             } catch (error) {
                 console.error('[CleanBotBrowser] Failed to load RisuRealm page:', error);
                 toastr.error('Failed to load page');
@@ -3299,11 +3733,13 @@ function setupSaucepanPaginationListeners(gridContainer, state, menuContent, sho
     pagination.querySelectorAll('.bot-browser-pagination-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
             const action = btn.dataset.action;
-            const currentPage = saucepanApiState.page || 1;
+            const currentPage = Number(state.lastVisitedPage || saucepanApiState.page || 1) || 1;
             const limit = saucepanApiState.limit || 24;
             let targetPage = currentPage;
 
-            if (action === 'next' && saucepanApiState.hasMore) {
+            const cachedPage = state.queryKey ? getCachedPage(state.queryKey, currentPage) : null;
+            const hasMore = cachedPage?.meta?.hasMore ?? saucepanApiState.hasMore;
+            if (action === 'next' && hasMore) {
                 targetPage = currentPage + 1;
             } else if (action === 'prev' && currentPage > 1) {
                 targetPage = currentPage - 1;
@@ -3315,29 +3751,8 @@ function setupSaucepanPaginationListeners(gridContainer, state, menuContent, sho
             btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
 
             try {
-                const targetOffset = (targetPage - 1) * limit;
-                const result = await searchSaucepanCompanions({
-                    search: saucepanApiState.lastSearch,
-                    sort: saucepanApiState.lastSort,
-                    offset: targetOffset,
-                    limit,
-                    nsfw: !extension_settings[extensionName].hideNsfw
-                });
-
-                const cards = result.characters.map(transformSaucepanCard);
-                saucepanApiState.page = targetPage;
-                saucepanApiState.offset = targetOffset + cards.length;
-                saucepanApiState.hasMore = result.hasMore;
-                saucepanApiState.total = result.total;
-
-                state.currentCards = cards;
-                state.filteredCards = applyClientSideFilters(state.currentCards, state, extensionName, extension_settings);
-                state.totalPages = 1;
-                state.currentPage = 1;
-
-                renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
-                updateSaucepanCount(menuContent, extensionName, extension_settings);
-                console.log(`[CleanBotBrowser] Loaded Saucepan page ${targetPage} (${cards.length} cards, ${saucepanApiState.offset}/${saucepanApiState.total || 'unknown'})`);
+                await loadPagedProviderPageIntoBrowser({ state, pageNum: targetPage, menuContent, showCardDetailFunc, extensionName, extension_settings });
+                saucepanApiState.offset = (targetPage - 1) * limit + state.currentCards.length;
             } catch (error) {
                 console.error('[CleanBotBrowser] Failed to load more Saucepan cards:', error);
                 toastr.error('Failed to load more cards');
@@ -3372,11 +3787,13 @@ function setupBotbooruPaginationListeners(gridContainer, state, menuContent, sho
     pagination.querySelectorAll('.bot-browser-pagination-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
             const action = btn.dataset.action;
-            const currentPage = botbooruApiState.page || 1;
+            const currentPage = Number(state.lastVisitedPage || botbooruApiState.page || 1) || 1;
             const limit = botbooruApiState.limit || 24;
             let targetPage = currentPage;
 
-            if (action === 'next' && botbooruApiState.hasMore) {
+            const cachedPage = state.queryKey ? getCachedPage(state.queryKey, currentPage) : null;
+            const hasMore = cachedPage?.meta?.hasMore ?? botbooruApiState.hasMore;
+            if (action === 'next' && hasMore) {
                 targetPage = currentPage + 1;
             } else if (action === 'prev' && currentPage > 1) {
                 targetPage = currentPage - 1;
@@ -3388,29 +3805,8 @@ function setupBotbooruPaginationListeners(gridContainer, state, menuContent, sho
             btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
 
             try {
-                const targetOffset = (targetPage - 1) * limit;
-                const result = await searchBotbooruPosts({
-                    search: botbooruApiState.lastSearch,
-                    sort: botbooruApiState.lastSort,
-                    offset: targetOffset,
-                    limit,
-                    sfwOnly: extension_settings[extensionName].hideNsfw !== false
-                });
-
-                const cards = result.posts.map(transformBotbooruCard);
-                botbooruApiState.page = targetPage;
-                botbooruApiState.offset = targetOffset + cards.length;
-                botbooruApiState.hasMore = result.hasMore;
-                botbooruApiState.total = result.total;
-
-                state.currentCards = cards;
-                state.filteredCards = applyClientSideFilters(state.currentCards, state, extensionName, extension_settings);
-                state.totalPages = 1;
-                state.currentPage = 1;
-
-                renderPage(state, menuContent, showCardDetailFunc, extensionName, extension_settings);
-                updateBotbooruCount(menuContent, extensionName, extension_settings);
-                console.log(`[CleanBotBrowser] Loaded BotBooru page ${targetPage} (${cards.length} cards, ${botbooruApiState.offset}/${botbooruApiState.total || 'unknown'})`);
+                await loadPagedProviderPageIntoBrowser({ state, pageNum: targetPage, menuContent, showCardDetailFunc, extensionName, extension_settings });
+                botbooruApiState.offset = (targetPage - 1) * limit + state.currentCards.length;
             } catch (error) {
                 console.error('[CleanBotBrowser] Failed to load BotBooru cards:', error);
                 toastr.error('Failed to load more cards');

@@ -27,6 +27,9 @@ const DISABLED_ARCHIVE_SERVICES = new Set([
 ]);
 
 const STATIC_ARCHIVE_DISABLED_MESSAGE = 'Static CleanBotBrowser archives are disabled in this cleaned build because the previous remote archive source was used for XSS delivery.';
+const LIVE_QUERY_CACHE_TTL_MS = 2 * 60 * 1000;
+const LIVE_QUERY_CACHE_MAX_ENTRIES = 40;
+const LIVE_QUERY_CACHE_MAX_PAGES_PER_QUERY = 8;
 
 // Storage for loaded data
 const loadedData = {
@@ -34,6 +37,327 @@ const loadedData = {
     serviceIndexes: {},
     loadedChunks: {}
 };
+const liveQueryCache = new Map();
+
+function stableSerialize(value) {
+    if (value === null || value === undefined) return 'null';
+    if (Array.isArray(value)) {
+        return `[${value.map(stableSerialize).join(',')}]`;
+    }
+    if (typeof value === 'object') {
+        const keys = Object.keys(value).sort();
+        return `{${keys.map(key => `${JSON.stringify(key)}:${stableSerialize(value[key])}`).join(',')}}`;
+    }
+    return JSON.stringify(value);
+}
+
+function normalizeLiveCards(cards) {
+    return Array.isArray(cards) ? cards.filter(Boolean) : [];
+}
+
+function getLiveCardCacheKey(card) {
+    if (!card || typeof card !== 'object') return '';
+    if (card._anchorholdCanonicalKey) return `anchorhold:${String(card._anchorholdCanonicalKey).toLowerCase().trim()}`;
+    if (card.id) return `id:${String(card.id).trim()}`;
+    const name = String(card.name || '').toLowerCase().trim();
+    const creator = String(card.creator || 'unknown').toLowerCase().trim();
+    return `name:${name}|${creator}`;
+}
+
+function dedupeLiveCards(cards) {
+    const seen = new Set();
+    const out = [];
+    for (const card of normalizeLiveCards(cards)) {
+        const key = getLiveCardCacheKey(card);
+        if (key && seen.has(key)) continue;
+        if (key) seen.add(key);
+        out.push(card);
+    }
+    return out;
+}
+
+function touchQueryEntry(entry) {
+    if (!entry) return;
+    entry.lastAccessedAt = Date.now();
+}
+
+function trimQueryPages(entry) {
+    if (!entry || entry.pages.size <= LIVE_QUERY_CACHE_MAX_PAGES_PER_QUERY) return;
+    const pagesToKeep = [...entry.pages.keys()]
+        .sort((a, b) => {
+            if (a === entry.lastVisitedPage) return 1;
+            if (b === entry.lastVisitedPage) return -1;
+            const metaA = entry.pageMeta.get(a);
+            const metaB = entry.pageMeta.get(b);
+            return Number(metaA?.lastAccessedAt || metaA?.fetchedAt || 0) - Number(metaB?.lastAccessedAt || metaB?.fetchedAt || 0);
+        });
+
+    while (pagesToKeep.length > LIVE_QUERY_CACHE_MAX_PAGES_PER_QUERY) {
+        const page = pagesToKeep.shift();
+        entry.pages.delete(page);
+        entry.pageMeta.delete(page);
+    }
+}
+
+function trimLiveQueryCache() {
+    if (liveQueryCache.size <= LIVE_QUERY_CACHE_MAX_ENTRIES) return;
+    const victims = [...liveQueryCache.entries()]
+        .sort((a, b) => Number(a[1]?.lastAccessedAt || 0) - Number(b[1]?.lastAccessedAt || 0));
+
+    while (victims.length > 0 && liveQueryCache.size > LIVE_QUERY_CACHE_MAX_ENTRIES) {
+        const [queryKey] = victims.shift();
+        liveQueryCache.delete(queryKey);
+    }
+}
+
+function ensureLiveQueryEntry(queryKey, options = {}) {
+    const {
+        provider = '',
+        mode = 'paged',
+        pageSize = 24,
+        prefetchNext = false,
+        queryState = null,
+    } = options;
+
+    let entry = liveQueryCache.get(queryKey);
+    if (!entry) {
+        entry = {
+            queryKey,
+            provider,
+            mode,
+            pageSize,
+            prefetchNext,
+            queryState,
+            pages: new Map(),
+            pageMeta: new Map(),
+            mergedCards: [],
+            lastVisitedPage: 1,
+            inFlightRequests: new Map(),
+            createdAt: Date.now(),
+            lastAccessedAt: Date.now(),
+        };
+        liveQueryCache.set(queryKey, entry);
+        trimLiveQueryCache();
+    } else {
+        if (provider) entry.provider = provider;
+        if (mode) entry.mode = mode;
+        if (pageSize) entry.pageSize = pageSize;
+        if (typeof prefetchNext === 'boolean') entry.prefetchNext = prefetchNext;
+        if (queryState) entry.queryState = queryState;
+        touchQueryEntry(entry);
+    }
+
+    return entry;
+}
+
+function buildWarmCards(entry, requestedPage = null) {
+    if (!entry) return [];
+    if (entry.mode === 'append') {
+        if (entry.mergedCards.length > 0) return entry.mergedCards;
+        const orderedPages = [...entry.pages.keys()].sort((a, b) => a - b);
+        return dedupeLiveCards(orderedPages.flatMap(page => entry.pages.get(page) || []));
+    }
+
+    const preferredPage = Number(requestedPage || entry.lastVisitedPage || 1) || 1;
+    if (entry.pages.has(preferredPage)) {
+        return entry.pages.get(preferredPage) || [];
+    }
+    const fallbackPage = [...entry.pages.keys()].sort((a, b) => a - b)[0];
+    return fallbackPage ? (entry.pages.get(fallbackPage) || []) : [];
+}
+
+export function getQueryKey(provider, queryState = {}) {
+    return `${String(provider || 'unknown')}::${stableSerialize(queryState)}`;
+}
+
+export function getCachedPage(queryKey, page) {
+    const entry = liveQueryCache.get(queryKey);
+    if (!entry || !entry.pages.has(page)) return null;
+
+    const meta = entry.pageMeta.get(page) || {};
+    meta.lastAccessedAt = Date.now();
+    entry.pageMeta.set(page, meta);
+    touchQueryEntry(entry);
+
+    return {
+        cards: entry.pages.get(page) || [],
+        meta,
+        isStale: (Date.now() - Number(meta.fetchedAt || 0)) > LIVE_QUERY_CACHE_TTL_MS,
+    };
+}
+
+export function setCachedPage(queryKey, page, payload = {}) {
+    const {
+        provider = '',
+        mode = 'paged',
+        pageSize = 24,
+        prefetchNext = false,
+        queryState = null,
+        cards = [],
+        meta = {},
+        mergedCards = null,
+        appendMerge = false,
+        lastVisitedPage = null,
+    } = payload;
+
+    const entry = ensureLiveQueryEntry(queryKey, {
+        provider,
+        mode,
+        pageSize,
+        prefetchNext,
+        queryState,
+    });
+    const normalizedCards = dedupeLiveCards(cards);
+    const fetchedAt = Number(meta.fetchedAt || Date.now()) || Date.now();
+    entry.pages.set(page, normalizedCards);
+    entry.pageMeta.set(page, {
+        ...meta,
+        fetchedAt,
+        lastAccessedAt: Date.now(),
+    });
+
+    if (Array.isArray(mergedCards)) {
+        entry.mergedCards = dedupeLiveCards(mergedCards);
+    } else if (entry.mode === 'append' || appendMerge) {
+        entry.mergedCards = dedupeLiveCards([...entry.mergedCards, ...normalizedCards]);
+    }
+
+    if (lastVisitedPage != null) {
+        entry.lastVisitedPage = Number(lastVisitedPage) || 1;
+    }
+
+    touchQueryEntry(entry);
+    trimQueryPages(entry);
+
+    return entry;
+}
+
+export function getWarmQuerySnapshot(queryKey, options = {}) {
+    const entry = liveQueryCache.get(queryKey);
+    if (!entry) return null;
+
+    const requestedPage = Number(options.page || entry.lastVisitedPage || 1) || 1;
+    const cards = buildWarmCards(entry, requestedPage);
+    if (cards.length === 0) return null;
+
+    const pageToUse = entry.mode === 'append'
+        ? requestedPage
+        : (entry.pages.has(requestedPage) ? requestedPage : ([...entry.pages.keys()].sort((a, b) => a - b)[0] || 1));
+    const meta = entry.pageMeta.get(pageToUse) || {};
+    touchQueryEntry(entry);
+
+    return {
+        queryKey,
+        provider: entry.provider,
+        mode: entry.mode,
+        pageSize: entry.pageSize,
+        prefetchNext: entry.prefetchNext,
+        cards,
+        mergedCards: entry.mergedCards,
+        currentPage: pageToUse,
+        lastVisitedPage: entry.lastVisitedPage || pageToUse,
+        isStale: (Date.now() - Number(meta.fetchedAt || 0)) > LIVE_QUERY_CACHE_TTL_MS,
+        fetchedAt: Number(meta.fetchedAt || 0),
+        pagesCached: [...entry.pages.keys()].sort((a, b) => a - b),
+        queryState: entry.queryState,
+    };
+}
+
+export async function revalidateQueryPage(queryKey, page, fetcher, options = {}) {
+    const entry = ensureLiveQueryEntry(queryKey, options);
+    const cached = getCachedPage(queryKey, page);
+    if (!options.force && cached && !cached.isStale) {
+        return {
+            cards: cached.cards,
+            meta: cached.meta,
+            fromCache: true,
+            updated: false,
+        };
+    }
+
+    if (entry.inFlightRequests.has(page)) {
+        return entry.inFlightRequests.get(page);
+    }
+
+    const task = (async () => {
+        try {
+            const result = await fetcher();
+            const cards = normalizeLiveCards(Array.isArray(result) ? result : result?.cards);
+            const meta = {
+                ...(result?.meta || {}),
+                hasMore: result?.hasMore ?? result?.meta?.hasMore ?? false,
+                total: result?.total ?? result?.meta?.total,
+                totalPages: result?.totalPages ?? result?.meta?.totalPages,
+                fetchedAt: Date.now(),
+            };
+
+            setCachedPage(queryKey, page, {
+                ...options,
+                cards,
+                meta,
+                appendMerge: options.mode === 'append',
+            });
+
+            return {
+                cards,
+                meta,
+                fromCache: false,
+                updated: true,
+            };
+        } finally {
+            entry.inFlightRequests.delete(page);
+        }
+    })();
+
+    entry.inFlightRequests.set(page, task);
+    return task;
+}
+
+export function prefetchNextPage(queryKey, currentPage, fetcher, options = {}) {
+    const nextPage = (Number(currentPage) || 1) + 1;
+    const cached = getCachedPage(queryKey, nextPage);
+    if (cached && !cached.isStale) {
+        return Promise.resolve({
+            cards: cached.cards,
+            meta: cached.meta,
+            fromCache: true,
+            updated: false,
+        });
+    }
+
+    return revalidateQueryPage(queryKey, nextPage, fetcher, {
+        ...options,
+        force: false,
+    }).catch((error) => {
+        console.warn('[CleanBotBrowser] Failed to prefetch next live query page:', error);
+        return null;
+    });
+}
+
+export function invalidateProviderQueries(provider, reason = '') {
+    const normalized = String(provider || '').trim();
+    if (!normalized) return;
+    for (const [queryKey, entry] of liveQueryCache.entries()) {
+        if (entry.provider === normalized) {
+            liveQueryCache.delete(queryKey);
+        }
+    }
+    if (reason) {
+        console.log(`[CleanBotBrowser] Invalidated live query cache for ${normalized}: ${reason}`);
+    }
+}
+
+export function markQueryPageVisited(queryKey, page) {
+    const entry = liveQueryCache.get(queryKey);
+    if (!entry) return;
+    entry.lastVisitedPage = Number(page || 1) || 1;
+    const meta = entry.pageMeta.get(entry.lastVisitedPage);
+    if (meta) {
+        meta.lastAccessedAt = Date.now();
+        entry.pageMeta.set(entry.lastVisitedPage, meta);
+    }
+    touchQueryEntry(entry);
+}
 
 export async function loadMasterIndex() {
     loadedData.masterIndex = { services: [] };
