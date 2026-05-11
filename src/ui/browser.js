@@ -221,10 +221,12 @@ function getLiveQueryContext(state, extensionName, extension_settings) {
 
 function applyPagedCardsToState(state, cards, page, meta, extensionName, extension_settings, options = {}) {
     const normalizedCards = Array.isArray(cards) ? cards : [];
-    state.pageCacheView = normalizedCards;
     state.currentCards = normalizedCards;
     state.fuse = null;
     state.filteredCards = sortCards(applyClientSideFilters(normalizedCards, state, extensionName, extension_settings), state.sortBy);
+    // Paged providers render from pageCacheView, so keep the rendered page synchronized
+    // with the filtered/scored cards rather than the raw API payload.
+    state.pageCacheView = state.filteredCards;
     state.currentPage = page;
     state.totalPages = 1;
     state.lastVisitedPage = page;
